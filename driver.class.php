@@ -10,7 +10,7 @@
  * @copyright  Copyright (c) 2008-2016 myqee.com
  * @license    http://www.myqee.com/license.html
  */
-abstract class Module_Database_Drive
+abstract class Module_Database_Driver
 {
     /**
      * 当前连接类型 master|slaver
@@ -108,7 +108,7 @@ abstract class Module_Database_Drive
      * @param array $input_parameters
      * @param null|bool|string $as_object
      * @param null|bool|string $connection_type
-     * @return Database_Drive_MySQLI_Result
+     * @return Database_Driver_MySQLI_Result
      */
     public function execute($statement, array $input_parameters, $as_object = null, $connection_type = null)
     {
@@ -184,7 +184,7 @@ abstract class Module_Database_Drive
      * @param string $sql 查询语句
      * @param bool|string $as_object 是否返回对象
      * @param bool|string $use_master 是否使用主数据库，不设置则自动判断
-     * @return Database_Drive_MySQLI_Result
+     * @return Database_Driver_MySQLI_Result
      */
     abstract public function query($sql, $as_object = null, $use_master = null);
 
@@ -344,11 +344,11 @@ abstract class Module_Database_Drive
      */
     public function transaction()
     {
-        $tr_name = 'Database_Drive_'. $this->config['type'] .'_Transaction';
+        $tr_name = 'Database_Driver_'. $this->config['type'] .'_Transaction';
 
         if (!class_exists($tr_name, true))
         {
-            throw new Exception(__('the transaction of :drive not exist.', array(':drive'=>$this->config['type'])));
+            throw new Exception(__('the transaction of :driver not exist.', array(':driver'=>$this->config['type'])));
         }
 
         return new $tr_name($this);
@@ -478,7 +478,7 @@ abstract class Module_Database_Drive
     {
         $hash = sha1(get_class($this) .'_'. $hostname .'_'. $port .'_'. $username);
 
-        Database_Drive::$_hash_to_hostname[$hash] = array
+        Database_Driver::$_hash_to_hostname[$hash] = array
         (
             'host'     => $hostname,
             'port'     => $port,
@@ -496,7 +496,7 @@ abstract class Module_Database_Drive
      */
     protected static function _get_hostname_by_connection_hash($hash)
     {
-        return Database_Drive::$_hash_to_hostname[$hash];
+        return Database_Driver::$_hash_to_hostname[$hash];
     }
 
     /**
