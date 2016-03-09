@@ -1,46 +1,44 @@
 <?php
+namespace MyQEE\Database;
 
 /**
  * 数据库驱动核心类
  *
  * @author     呼吸二氧化碳 <jonwang@myqee.com>
- * @category   MyQEE
- * @package    Module
- * @subpackage Database
+ * @category   Database
  * @copyright  Copyright (c) 2008-2016 myqee.com
  * @license    http://www.myqee.com/license.html
  */
-abstract class Module_Database_Driver
+abstract class Driver
 {
     /**
      * 当前连接类型 master|slave
      *
      * @var string
      */
-    protected $_connection_type = 'slave';
+    protected $connectionType = 'slave';
 
     /**
      * 当前连接的所有的ID
      *
-     *    array(
-     *    	'master' => 'abcdef...',
-     *    	'slave' => 'defdef...',
-     *    )
+     *     [
+     *        'master' => 'abcdef...',
+     *        'slave'  => 'defdef...',
+     *     ]
      *
      * @var array
      */
-    protected $_connection_ids = array
-    (
+    protected $connectionIds = [
         'master' => null,
-        'slave' => null,
-    );
+        'slave'  => null,
+    ];
 
     /**
      * 最后查询SQL语句
      *
      * @var string
      */
-    protected $last_query = '';
+    protected $lastQuery = '';
 
     /**
      * 当前配置
@@ -53,16 +51,16 @@ abstract class Module_Database_Driver
      *
      * @var string
      */
-    protected $_identifier = '"';
+    protected $identifier = '"';
 
     /**
      * 默认端口
      *
      * @var int
      */
-    protected $_default_port = null;
+    protected $defaultPort = null;
 
-    protected $_as_table = array();
+    protected $_asTable = [];
 
     /**
      * 引擎是MySQL
@@ -70,6 +68,34 @@ abstract class Module_Database_Driver
      * @var bool
      */
     protected $mysql = false;
+
+    /**
+     * 注册器对象列表
+     *
+     * @var array
+     */
+    protected $injectors = [];
+
+    /**
+     * 事件列表
+     *
+     * @var array
+     */
+    protected $events = [];
+
+    /**
+     * Before事件列表
+     *
+     * @var array
+     */
+    protected $eventsBefore = [];
+
+    /**
+     * After事件列表
+     *
+     * @var array
+     */
+    protected $eventsAfter = [];
 
     /**
      * 记录事务
@@ -80,47 +106,48 @@ abstract class Module_Database_Driver
      * )
      * @var array
      */
-    protected static $transactions = array();
+    protected static $transactions = [];
 
     /**
      * 记录hash对应的host数据
      * @var array
      */
-    protected static $_hash_to_hostname = array();
+    protected static $_hashToHostName = [];
 
     public function __construct(array $config)
     {
         $this->config = $config;
+
         if (!is_array($this->config['connection']['hostname']))
         {
             # 主从链接采用同一个内存地址
-            $this->_connection_ids['master'] =& $this->_connection_ids['slave'];
+            $this->connectionIds['master'] =& $this->connectionIds['slave'];
         }
 
-        if ($this->_default_port && (!isset($this->config['connection']['port']) || !$this->config['connection']['port']>0))
+        if ($this->defaultPort && (!isset($this->config['connection']['port']) || !$this->config['connection']['port'] > 0))
         {
-            $this->config['connection']['port'] = $this->_default_port;
+            $this->config['connection']['port'] = $this->defaultPort;
         }
     }
 
     public function __destruct()
     {
-        $this->close_connect();
+        $this->closeConnect();
     }
 
     /**
      * 执行构造语法执行
      *
      * @param string $statement
-     * @param array $input_parameters
-     * @param null|bool|string $as_object
-     * @param null|bool|string $connection_type
-     * @return Database_Driver_MySQLI_Result
+     * @param array $inputParameters
+     * @param null|bool|string $asObject
+     * @param null|bool|string $connectionType
+     * @return Driver_MySQLI_Result
      */
-    public function execute($statement, array $input_parameters, $as_object = null, $connection_type = null)
+    public function execute($statement, array $inputParameters, $asObject = null, $connectionType = null)
     {
         $num_parameters = array();
-        foreach($input_parameters as $key => $value)
+        foreach($inputParameters as $key => $value)
         {
             if (is_int($key))
             {
@@ -135,24 +162,24 @@ abstract class Module_Database_Driver
         if ($num_parameters)
         {
             # 用 ? 分割开
-            $statement_arr = explode('?', $statement);
+            $statementArray = explode('?', $statement);
 
             # 填补缺失的key，例如 $num_parameters = array(0=>'a', 2=>'b'); 缺失了 1
-            foreach($statement_arr as $key => $value)
+            foreach($statementArray as $key => $value)
             {
-                if (!isset($statement_arr[$key]))$statement_arr[$key] = '?';
+                if (!isset($statementArray[$key]))$statementArray[$key] = '?';
             }
 
             foreach($num_parameters as $key => $value)
             {
-                $statement_arr[$key] = $this->quote($value) . $statement_arr[$key];
+                $statementArray[$key] = $this->quote($value) . $statementArray[$key];
             }
 
             # 拼接
-            $statement = implode('', $statement_arr);
+            $statement = implode('', $statementArray);
         }
 
-        return $this->query($statement, $as_object, $connection_type);
+        return $this->query($statement, $asObject, $connectionType);
     }
 
     /**
@@ -163,47 +190,47 @@ abstract class Module_Database_Driver
         switch ($type)
         {
             case 'insert':
-                return $this->_compile_insert($builder);
+                return $this->_compileInsert($builder);
 
             case'replace':
-                return $this->_compile_insert($builder, 'REPLACE');
+                return $this->_compileInsert($builder, 'REPLACE');
 
             case'insert_update':
-                return $this->_compile_insert($builder, 'REPLACE', true);
+                return $this->_compileInsert($builder, 'REPLACE', true);
 
             case 'update':
-                return $this->_compile_update($builder);
+                return $this->_compileDpdate($builder);
 
             case 'delete':
-                return $this->_compile_delete($builder);
+                return $this->_compileDelete($builder);
 
             default:
-                return $this->_compile_select($builder);
+                return $this->_compileSelect($builder);
         }
     }
 
     /**
      * 查询
      * @param string $sql 查询语句
-     * @param bool|string $as_object 是否返回对象
-     * @param bool|string $use_master 是否使用主数据库，不设置则自动判断
-     * @return Database_Driver_MySQLI_Result
+     * @param bool|string $asObject 是否返回对象
+     * @param bool|string $useMaster 是否使用主数据库，不设置则自动判断
+     * @return Driver_MySQLI_Result
      */
-    abstract public function query($sql, $as_object = null, $use_master = null);
+    abstract public function query($sql, $asObject = null, $useMaster = null);
 
     /**
      * 连接数据库
      *
      * $use_connection_type 默认不传为自动判断，可传true/false,若传字符串(只支持a-z0-9的字符串)，则可以切换到另外一个连接，比如传other,则可以连接到$this->_connection_other_id所对应的ID的连接
      *
-     * @param boolean $use_connection_type 是否使用主数据库
+     * @param boolean $useConnectionType 是否使用主数据库
      */
-    abstract public function connect($use_connection_type = null);
+    abstract public function connect($useConnectionType = null);
 
     /**
      * 关闭链接
      */
-    abstract public function close_connect();
+    abstract public function closeConnect();
 
     /**
      * Sanitize a string by escaping characters that could cause an SQL
@@ -222,12 +249,12 @@ abstract class Module_Database_Driver
      * $table = $db->quote_table($table);
      *
      * @param   mixed  $value table name or array(table, alias)
-     * @param   bool  $auto_as_table
+     * @param   bool  $autoAsTable
      * @return  string
      * @uses    Database::_quote_identifier
      * @uses    Database::table_prefix
      */
-    public function quote_table($value, $auto_as_table = false)
+    public function quoteTable($value, $autoAsTable = false)
     {
         // Assign the table by reference from the value
         if (is_array($value))
@@ -241,17 +268,17 @@ abstract class Module_Database_Driver
 
         if ($this->config['table_prefix'] && is_string($table) && strpos($table, '.') === false)
         {
-            if (stripos($table, ' AS ')!==false)
+            if (stripos($table, ' AS ') !== false)
             {
                 $table = $this->config['table_prefix'] . $table;
             }
             else
             {
-                $table = $this->config['table_prefix'] . $table . ($auto_as_table?' AS '.$table:'');
+                $table = $this->config['table_prefix'] . $table . ($autoAsTable ? ' AS ' . $table : '');
             }
         }
 
-        return $this->_quote_identifier($value);
+        return $this->_quoteIdentifier($value);
     }
 
     /**
@@ -286,17 +313,17 @@ abstract class Module_Database_Driver
         }
         elseif (is_object($value))
         {
-            if ($value instanceof Database)
+            if ($value instanceof DB)
             {
                 // Create a sub-query
                 return '('. $value->compile() .')';
             }
-            elseif ($value instanceof Database_Expression)
+            elseif ($value instanceof Expression)
             {
                 // Use a raw expression
                 return $value->value();
             }
-            elseif ($value instanceof ArrayObject || $value instanceof ArrayIterator || $value instanceof stdClass)
+            elseif ($value instanceof \ArrayObject || $value instanceof \ArrayIterator || $value instanceof \stdClass)
             {
                 return '('. implode(', ', array_map(array($this, __FUNCTION__), (array)$value)) .')';
             }
@@ -326,7 +353,7 @@ abstract class Module_Database_Driver
     /**
      * 获取当前连接
      *
-     * @return mysqli
+     * @return \mysqli
      */
     abstract public function connection();
 
@@ -335,25 +362,26 @@ abstract class Module_Database_Driver
      *
      * @return string
      */
-    public function connection_id()
+    public function connectionId()
     {
-        return $this->_connection_ids[$this->_connection_type];
+        return $this->connectionIds[$this->connectionType];
     }
 
     /**
      * 获取事务对象
      *
-     * @return Database_Transaction
+     * @return Transaction
      */
     public function transaction()
     {
-        $tr_name = $this->transaction_class_name();
-        if (false === $tr_name)
+        $className = $this->transactionClassName();
+
+        if (false === $className)
         {
-            throw new Exception(__('the transaction of :driver not exist.', array(':driver'=>$this->config['type'])));
+            throw new \Exception(__('the transaction of :driver not exist.', [':driver' => $this->config['type']]));
         }
 
-        return new $tr_name($this);
+        return new $className($this);
     }
 
     /**
@@ -363,14 +391,14 @@ abstract class Module_Database_Driver
      *
      * @return string|false
      */
-    public function transaction_class_name()
+    public function transactionClassName()
     {
-        static $support = array();
+        static $support = [];
 
         if (!isset($support[$this->config['type']]))
         {
-            $tr_name = 'Database_Driver_'. $this->config['type'] .'_Transaction';
-            $support[$this->config['type']] = class_exists($tr_name, true) ? $tr_name : false;
+            $className = '\\MyQEE\\Database\\Driver_'. $this->config['type'] .'_Transaction';
+            $support[$this->config['type']] = class_exists($className, true) ? $className : false;
         }
 
         return $support[$this->config['type']];
@@ -381,9 +409,9 @@ abstract class Module_Database_Driver
      *
      * @return string
      */
-    public function last_query()
+    public function lastQuery()
     {
-        return $this->last_query;
+        return $this->lastQuery;
     }
 
     /**
@@ -393,28 +421,31 @@ abstract class Module_Database_Driver
      * @param string $charset 编码，不传则使用数据库连接配置相同到编码
      * @param string $collate 整理格式
      * @return boolean
-     * @throws Exception
+     * @throws \Exception
      */
-    public function create_database($database, $charset = null, $collate = null)
+    public function createDatabase($database, $charset = null, $collate = null)
     {
         $config = $this->config;
         $this->config['connection']['database'] = null;
+
         if (!$charset)
         {
             $charset = $this->config['charset'];
         }
-        $sql = 'CREATE DATABASE ' . $this->_quote_identifier($database) .' DEFAULT CHARACTER SET '. $charset;
+        $sql = 'CREATE DATABASE ' . $this->_quoteIdentifier($database) .' DEFAULT CHARACTER SET '. $charset;
+
         if ($collate)
         {
             $sql .= ' COLLATE '. $collate;
         }
         try
         {
-            $result = $this->query($sql, null, true)->result();
+            $result       = $this->query($sql, null, true)->result();
             $this->config = $config;
+
             return $result;
         }
-        catch (Exception $e)
+        catch (\Exception $e)
         {
             $this->config = $config;
             throw $e;
@@ -426,7 +457,7 @@ abstract class Module_Database_Driver
      *
      * @var bool
      */
-    public function is_support_object_value()
+    public function isSupportObjectValue()
     {
         return false;
     }
@@ -434,47 +465,47 @@ abstract class Module_Database_Driver
     /**
      * 获取一个随机HOST
      *
-     * @param array $exclude_hosts 排除的HOST
+     * @param array $excludeHosts 排除的HOST
      * @param string $type 配置类型
      */
-    protected function _get_rand_host($exclude_hosts = array(), $type = null)
+    protected function _getRandHost($excludeHosts = [], $type = null)
     {
-        if (!$type)$type = $this->_connection_type;
+        if (!$type)$type = $this->connectionType;
         $hostname = $this->config['connection']['hostname'];
 
         if (!is_array($hostname))
         {
-            if (in_array($hostname, $exclude_hosts))
+            if (in_array($hostname, $excludeHosts))
             {
                 return false;
             }
 
-            if ($exclude_hosts && $type!='master' && in_array($hostname, $exclude_hosts))
+            if ($excludeHosts && $type !== 'master' && in_array($hostname, $excludeHosts))
             {
                 # 如果相应的slave都已不可获取，则改由获取master
-                return $this->_get_rand_host($exclude_hosts, 'master');
+                return $this->_getRandHost($excludeHosts, 'master');
             }
 
             return $hostname;
         }
 
-        $host_config = $hostname[$type];
+        $hostConfig = $hostname[$type];
 
-        if (is_array($host_config))
+        if (is_array($hostConfig))
         {
-            if ($exclude_hosts)
+            if ($excludeHosts)
             {
-                $host_config = array_diff($host_config, $exclude_hosts);
+                $hostConfig = array_diff($hostConfig, $excludeHosts);
             }
 
-            $host_config = array_values($host_config);
-            $count = count($host_config);
+            $hostConfig = array_values($hostConfig);
+            $count      = count($hostConfig);
 
-            if ($count==0)
+            if ($count === 0)
             {
-                if ($type!='master')
+                if ($type !== 'master')
                 {
-                    return $this->_get_rand_host($exclude_hosts, 'master');
+                    return $this->_getRandHost($excludeHosts, 'master');
                 }
                 else
                 {
@@ -483,18 +514,18 @@ abstract class Module_Database_Driver
             }
 
             # 获取一个随机链接
-            $rand_id = mt_rand(0, $count - 1);
+            $randId = mt_rand(0, $count - 1);
 
-            return $host_config[$rand_id];
+            return $hostConfig[$randId];
         }
         else
         {
-            if (in_array($host_config, $exclude_hosts))
+            if (in_array($hostConfig, $excludeHosts))
             {
                 return false;
             }
 
-            return $host_config;
+            return $hostConfig;
         }
     }
 
@@ -506,16 +537,15 @@ abstract class Module_Database_Driver
      * @param string $username
      * @return string
      */
-    protected function _get_connection_hash($hostname, $port, $username)
+    protected function _getConnectionHash($hostname, $port, $username)
     {
         $hash = sha1(get_class($this) .'_'. $hostname .'_'. $port .'_'. $username);
 
-        Database_Driver::$_hash_to_hostname[$hash] = array
-        (
+        self::$_hashToHostName[$hash] = [
             'host'     => $hostname,
             'port'     => $port,
             'username' => $username,
-        );
+        ];
 
         return $hash;
     }
@@ -526,9 +556,9 @@ abstract class Module_Database_Driver
      * @param string $has
      * @return array array('hostname'=>'','port'=>'','username'=>'')
      */
-    protected static function _get_hostname_by_connection_hash($hash)
+    protected static function getHostnameByConnectionHash($hash)
     {
-        return Database_Driver::$_hash_to_hostname[$hash];
+        return self::$_hashToHostName[$hash];
     }
 
     /**
@@ -536,18 +566,25 @@ abstract class Module_Database_Driver
      *
      * @param string $value
      */
-    protected function _change_charset(& $value)
+    protected function changeCharset(& $value)
     {
-        if ($this->config['auto_change_charset'] && $this->config['charset']!='UTF8')
+        if ($this->config['auto_change_charset'] && $this->config['charset'] !== 'UTF8')
         {
-            # 转换编码编码
-            if (IS_MBSTRING)
+            static $mb = null;
+
+            if (null === $mb)
             {
-                $value = mb_convert_encoding((string)$value, $this->config['data_charset'], 'UTF-8');
+                $mb = function_exists('\\mb_convert_encoding');
+            }
+
+            # 转换编码编码
+            if ($mb)
+            {
+                $value = \mb_convert_encoding((string)$value, $this->config['data_charset'], 'UTF-8');
             }
             else
             {
-                $value = iconv('UTF-8', $this->config['data_charset'] .'//IGNORE', (string)$value);
+                $value = \iconv('UTF-8', $this->config['data_charset'] . '//IGNORE', (string)$value);
             }
         }
 
@@ -559,29 +596,29 @@ abstract class Module_Database_Driver
      *
      *    $use_connection_type 默认不传为自动判断，可传true/false,若传字符串(只支持a-z0-9的字符串)，则可以切换到另外一个连接，比如传other,则可以连接到$this->_connection_other_id所对应的ID的连接
      *
-     * @param boolean|string $use_connection_type
+     * @param boolean|string $connectionType
      */
-    protected function _set_connection_type($use_connection_type)
+    protected function _setConnectionType($connectionType)
     {
-        if (true===$use_connection_type)
+        if (true === $connectionType)
         {
-            $use_connection_type = 'master';
+            $connectionType = 'master';
         }
-        elseif (false===$use_connection_type)
+        elseif (false === $connectionType)
         {
-            $use_connection_type = 'slave';
+            $connectionType = 'slave';
         }
-        elseif (!$use_connection_type)
+        elseif (!$connectionType)
         {
             return;
         }
 
-        $this->_connection_type = $use_connection_type;
+        $this->connectionType = $connectionType;
     }
 
-    protected function _get_query_type($sql, & $connection_type)
+    protected function _getQueryType($sql, & $connectionType)
     {
-        if (preg_match('#^([a-z]+)(?: |\n|\r)#i', $sql, $m))
+        if (preg_match('#^([a-z]+)(:? |\n|\r)#i', $sql, $m))
         {
             $type = strtoupper($m[1]);
         }
@@ -590,8 +627,7 @@ abstract class Module_Database_Driver
             $type = null;
         }
 
-        $typeArr = array
-        (
+        $typeArr = [
             'SELECT',
             'SHOW',     //显示表
             'EXPLAIN',  //分析
@@ -600,38 +636,39 @@ abstract class Module_Database_Driver
             'REPLACE',
             'UPDATE',
             'DELETE',
-        );
+        ];
 
         if (!in_array($type, $typeArr))
         {
             $type = 'MASTER';
         }
 
-        $slave_type = array('SELECT', 'SHOW', 'EXPLAIN');
-        if ($type!='MASTER' && in_array($type, $slave_type))
+        $slave_type = ['SELECT', 'SHOW', 'EXPLAIN'];
+
+        if ($type !== 'MASTER' && in_array($type, $slave_type))
         {
-            if (true === $connection_type)
+            if (true === $connectionType)
             {
-                $connection_type = 'master';
+                $connectionType = 'master';
             }
-            else if (is_string($connection_type))
+            else if (is_string($connectionType))
             {
-                if (!preg_match('#^[a-z0-9_]+$#i', $connection_type))$connection_type = 'master';
+                if (!preg_match('#^[a-z0-9_]+$#i', $connectionType))$connectionType = 'master';
             }
             else
             {
-                $connection_type = 'slave';
+                $connectionType = 'slave';
             }
         }
         else
         {
-            $connection_type = 'master';
+            $connectionType = 'master';
         }
 
         return $type;
     }
 
-    protected function _quote_identifier($column)
+    protected function _quoteIdentifier($column)
     {
         if (is_array($column))
         {
@@ -640,12 +677,12 @@ abstract class Module_Database_Driver
 
         if (is_object($column))
         {
-            if ($column instanceof Database)
+            if ($column instanceof DB)
             {
                 // Create a sub-query
                 $column = '('. $column->compile() .')';
             }
-            elseif ($column instanceof Database_Expression)
+            elseif ($column instanceof Expression)
             {
                 // Use a raw expression
                 $column = $column->value();
@@ -653,7 +690,7 @@ abstract class Module_Database_Driver
             else
             {
                 // Convert the object to a string
-                $column = $this->_quote_identifier((string)$column);
+                $column = $this->_quoteIdentifier((string)$column);
             }
         }
         else
@@ -686,7 +723,7 @@ abstract class Module_Database_Driver
                     // Get the offset of the table name, 2nd-to-last part
                     $offset = count($parts) - 2;
 
-                    if (!$this->_as_table || !in_array($parts[$offset], $this->_as_table))
+                    if (!$this->_asTable || !in_array($parts[$offset], $this->_asTable))
                     {
                         $parts[$offset] = $prefix . $parts[$offset];
                     }
@@ -697,8 +734,8 @@ abstract class Module_Database_Driver
                     if ($part !== '*')
                     {
                         // Quote each of the parts
-                        $this->_change_charset($part);
-                        $part = $this->_identifier . str_replace(array($this->_identifier, '\\'), '', $part) . $this->_identifier;
+                        $this->changeCharset($part);
+                        $part = $this->identifier . str_replace([$this->identifier, '\\'], '', $part) . $this->identifier;
                     }
                 }
 
@@ -706,47 +743,46 @@ abstract class Module_Database_Driver
             }
             else
             {
-                $this->_change_charset($column);
-                $column = $this->_identifier . str_replace(array($this->_identifier, '\\'), '', $column) . $this->_identifier;
+                $this->changeCharset($column);
+                $column = $this->identifier . str_replace([$this->identifier, '\\'], '', $column) . $this->identifier;
             }
         }
 
         if (isset($alias))
         {
-            $this->_change_charset($alias);
-            $column .= ' AS ' . $this->_identifier . str_replace(array($this->_identifier, '\\'), '', $alias) . $this->_identifier;
+            $this->changeCharset($alias);
+            $column .= ' AS ' . $this->identifier . str_replace([$this->identifier, '\\'], '', $alias) . $this->identifier;
         }
 
         return $column;
     }
 
-    protected function _compile_select($builder)
+    protected function _compileSelect($builder)
     {
-        $quote_ident = array($this, '_quote_identifier');
+        $quoteIdentifier = [$this, '_quoteIdentifier'];
 
-        $quote_table = array($this, 'quote_table');
+        $quoteTable = [$this, 'quoteTable'];
 
         $query = 'SELECT ';
 
         if ($builder['distinct'])
         {
-            if (true===$builder['distinct'])
+            if (true === $builder['distinct'])
             {
                 $query .= 'DISTINCT ';
             }
             else
             {
-                $builder['select_adv'][] = array
-                (
+                $builder['select_adv'][] = [
                     $builder['distinct'],
                     'distinct',
-                );
+                ];
             }
         }
 
-        $this->_init_as_table($builder);
-        $this->_format_select_adv($builder);
-        $this->_format_group_concat($builder);
+        $this->_initAsTable($builder);
+        $this->_formatSelectAdv($builder);
+        $this->_formatGroupConcat($builder);
 
         if (empty($builder['select']))
         {
@@ -754,51 +790,51 @@ abstract class Module_Database_Driver
         }
         else
         {
-            $query .= implode(', ', array_unique(array_map($quote_ident, $builder['select'])));
+            $query .= implode(', ', array_unique(array_map($quoteIdentifier, $builder['select'])));
         }
 
         if (!empty($builder['from']))
         {
             // Set tables to select from
-            $query .= ' FROM ' . implode(', ', array_unique(array_map($quote_table, $builder['from'], array(true))));
+            $query .= ' FROM ' . implode(', ', array_unique(array_map($quoteTable, $builder['from'], array(true))));
         }
 
         if (!empty($builder['index']))
         {
             foreach ($builder['index'] as $item)
             {
-                $query .= ' '. strtoupper($item[1]) .' INDEX('. $this->_quote_identifier($item[0]) .')';
+                $query .= ' '. strtoupper($item[1]) .' INDEX('. $this->_quoteIdentifier($item[0]) .')';
             }
         }
 
         if (!empty($builder['join']))
         {
             // Add tables to join
-            $query .= ' '. $this->_compile_join($builder['join']);
+            $query .= ' '. $this->_compileJoin($builder['join']);
         }
 
         if (!empty($builder['where']))
         {
             // Add selection conditions
-            $query .= ' WHERE '. $this->_compile_conditions($builder['where']);
+            $query .= ' WHERE '. $this->_compileConditions($builder['where']);
         }
 
         if (!empty($builder['group_by']))
         {
             // Add sorting
-            $query .= ' GROUP BY '. implode(', ', array_map($quote_ident, $builder['group_by']));
+            $query .= ' GROUP BY '. implode(', ', array_map($quoteIdentifier, $builder['group_by']));
         }
 
         if (!empty($builder['having']))
         {
             // Add filtering conditions
-            $query .= ' HAVING '. $this->_compile_conditions($builder['having']);
+            $query .= ' HAVING '. $this->_compileConditions($builder['having']);
         }
 
         if (!empty($builder['order_by']))
         {
             // Add sorting
-            $query .= ' '. $this->_compile_order_by($builder['order_by']);
+            $query .= ' '. $this->_compileOrderBy($builder['order_by']);
         }
         elseif ($builder['where'])
         {
@@ -806,7 +842,7 @@ abstract class Module_Database_Driver
             $in_query = null;
             foreach ($builder['where'] as $item)
             {
-                if (isset($item['AND']) && $item['AND'][1] == 'in')
+                if (isset($item['AND']) && $item['AND'][1] === 'in')
                 {
                     if (count($item['AND'][1]) > 1)
                     {
@@ -818,7 +854,7 @@ abstract class Module_Database_Driver
             }
             if ($in_query)
             {
-                $query .= ' ORDER BY FIELD('. $this->_quote_identifier($in_query[0]) .', '. implode(', ', $this->quote($in_query[2])) .')';
+                $query .= ' ORDER BY FIELD('. $this->_quoteIdentifier($in_query[0]) .', '. implode(', ', $this->quote($in_query[2])) .')';
             }
         }
 
@@ -842,12 +878,12 @@ abstract class Module_Database_Driver
      *
      * @param $builder
      * @param string $type
-     * @param bool $insert_update
+     * @param bool $insertUpdate
      * @return string
      */
-    protected function _compile_insert($builder, $type = 'INSERT', $insert_update = false)
+    protected function _compileInsert($builder, $type = 'INSERT', $insertUpdate = false)
     {
-        if ($this->mysql && $insert_update)
+        if ($this->mysql && $insertUpdate)
         {
             $type_string = 'INSERT';
         }
@@ -860,17 +896,16 @@ abstract class Module_Database_Driver
             $type_string = $type;
         }
 
-        $query = $type_string . ' INTO ' . $this->quote_table($builder['table'], false);
+        $query = $type_string . ' INTO ' . $this->quoteTable($builder['table'], false);
 
         // Add the column names
-        $query .= ' (' . implode(', ', array_map(array($this, '_quote_identifier'), $builder['columns'])) .') ';
+        $query .= ' (' . implode(', ', array_map([$this, '_quoteIdentifier'], $builder['columns'])) .') ';
 
         if (is_array($builder['values']))
         {
-            // Callback for quoting values
-            $quote = array($this, 'quote');
+            $quote  = [$this, 'quote'];
+            $groups = [];
 
-            $groups = array();
             foreach ($builder['values'] as $group)
             {
                 $groups[] = '('. implode(', ', array_map($quote, $group)) .')';
@@ -897,12 +932,12 @@ abstract class Module_Database_Driver
             if (!empty($builder['where']))
             {
                 // Add selection conditions
-                $query .= ' WHERE '. $this->_compile_conditions($builder['where']);
+                $query .= ' WHERE '. $this->_compileConditions($builder['where']);
             }
 
-            if ($this->mysql && $insert_update)
+            if ($this->mysql && $insertUpdate)
             {
-                $query .= ' '. $this->_compile_on_duplicate_key_update($builder);
+                $query .= ' '. $this->_compileOnDuplicateKeyUpdate($builder);
             }
         }
 
@@ -915,14 +950,14 @@ abstract class Module_Database_Driver
      * @param $builder
      * @return string
      */
-    protected function _compile_on_duplicate_key_update($builder)
+    protected function _compileOnDuplicateKeyUpdate($builder)
     {
         $query = 'ON DUPLICATE KEY UPDATE ';
 
         $groups = array();
         foreach ($builder['columns'] as $column)
         {
-            $c = $this->_quote_identifier($column);
+            $c = $this->_quoteIdentifier($column);
 
             $groups[] = "{$c} = VALUES({$c})";
         }
@@ -930,24 +965,24 @@ abstract class Module_Database_Driver
         return $query . implode(', ', $groups);
     }
 
-    protected function _compile_update($builder)
+    protected function _compileDpdate($builder)
     {
         // Start an update query
-        $query = 'UPDATE '. $this->quote_table($builder['table'], false);
+        $query = 'UPDATE '. $this->quoteTable($builder['table'], false);
 
         // Add the columns to update
-        $query .= ' SET '. $this->_compile_set($builder['set']);
+        $query .= ' SET '. $this->_compileSet($builder['set']);
 
         if (!empty($builder['where']))
         {
             // Add selection conditions
-            $query .= ' WHERE '. $this->_compile_conditions($builder['where']);
+            $query .= ' WHERE '. $this->_compileConditions($builder['where']);
         }
 
         if (!empty($builder['order_by']))
         {
             // Add sorting
-            $query .= ' '. $this->_compile_order_by($builder['order_by']);
+            $query .= ' '. $this->_compileOrderBy($builder['order_by']);
         }
 
         if ($builder['limit'] !== null)
@@ -965,17 +1000,17 @@ abstract class Module_Database_Driver
         return $query;
     }
 
-    protected function _compile_delete($builder)
+    protected function _compileDelete($builder)
     {
         // Start an update query
-        $query = 'DELETE FROM'. $this->quote_table($builder['table'], false);
+        $query = 'DELETE FROM'. $this->quoteTable($builder['table'], false);
 
         if (!empty($builder['where']))
         {
-            $this->_init_as_table($builder);
+            $this->_initAsTable($builder);
 
             // Add selection conditions
-            $query .= ' WHERE '. $this->_compile_conditions($builder['where']);
+            $query .= ' WHERE '. $this->_compileConditions($builder['where']);
         }
 
         return $query;
@@ -987,7 +1022,7 @@ abstract class Module_Database_Driver
      * @param   array  $columns sorting columns
      * @return  string
      */
-    protected function _compile_order_by(array $columns)
+    protected function _compileOrderBy(array $columns)
     {
         $sort = array();
         foreach ($columns as $group)
@@ -1000,7 +1035,7 @@ abstract class Module_Database_Driver
                 $direction = ' '. strtoupper($direction);
             }
 
-            $sort[] = $this->_quote_identifier($column) . $direction;
+            $sort[] = $this->_quoteIdentifier($column) . $direction;
         }
 
         return 'ORDER BY '. implode(', ', $sort);
@@ -1013,9 +1048,9 @@ abstract class Module_Database_Driver
      * @param   array  $conditions condition statements
      * @return  string
      */
-    protected function _compile_conditions(array $conditions)
+    protected function _compileConditions(array $conditions)
     {
-        $last_condition = null;
+        $lastCondition = null;
 
         $sql = '';
         foreach ($conditions as $group)
@@ -1025,7 +1060,7 @@ abstract class Module_Database_Driver
             {
                 if ($condition === '(')
                 {
-                    if (!empty($sql) && $last_condition !== '(')
+                    if (!empty($sql) && $lastCondition !== '(')
                     {
                         // Include logic operator
                         $sql .= ' ' . $logic . ' ';
@@ -1039,7 +1074,7 @@ abstract class Module_Database_Driver
                 }
                 else
                 {
-                    if (!empty($sql) && $last_condition !== '(')
+                    if (!empty($sql) && $lastCondition !== '(')
                     {
                         // Add the logic operator
                         $sql .= ' '. $logic .' ';
@@ -1065,15 +1100,15 @@ abstract class Module_Database_Driver
                     // Database operators are always uppercase
                     $op = strtoupper($op);
 
-                    if (is_array($value) && count($value)<=1)
+                    if (is_array($value) && count($value) <= 1)
                     {
                         # 将in条件下只有1条数据的改为where方式
-                        if ($op == 'IN')
+                        if ($op === 'IN')
                         {
                             $op = '=';
                             $value = current($value);
                         }
-                        elseif ($op == 'NOT IN')
+                        elseif ($op === 'NOT IN')
                         {
                             $op = '!=';
                             $value = current($value);
@@ -1088,7 +1123,7 @@ abstract class Module_Database_Driver
                         // Quote the min and max value
                         $value = $this->quote($min) .' AND '. $this->quote($max);
                     }
-                    elseif ($op == 'MOD')
+                    elseif ($op === 'MOD')
                     {
                         $value = $this->quote($value[0]) .' '. strtoupper($value[2]) .' '. $this->quote($value[1]);
                     }
@@ -1096,11 +1131,11 @@ abstract class Module_Database_Driver
                     {
                         if (is_array($value))
                         {
-                            if ($op=='=')
+                            if ($op === '=')
                             {
                                 $op = 'IN';
                             }
-                            elseif ($op=='!=')
+                            elseif ($op === '!=')
                             {
                                 $op = 'NOT IN';
                             }
@@ -1110,10 +1145,10 @@ abstract class Module_Database_Driver
                     }
 
                     // Append the statement to the query
-                    $sql .= $this->_quote_identifier($column) .' '. $op .' '. $value;
+                    $sql .= $this->_quoteIdentifier($column) .' '. $op .' '. $value;
                 }
 
-                $last_condition = $condition;
+                $lastCondition = $condition;
             }
         }
 
@@ -1126,19 +1161,19 @@ abstract class Module_Database_Driver
      * @param   array  $joins join statements
      * @return  string
      */
-    protected function _compile_join(array $joins)
+    protected function _compileJoin(array $joins)
     {
         $statements = array();
 
         foreach ($joins as $join)
         {
-            $statements[] = $this->_compile_join_on($join);
+            $statements[] = $this->_compileJoinOn($join);
         }
 
         return implode(' ', $statements);
     }
 
-    protected function _compile_join_on($join)
+    protected function _compileJoinOn($join)
     {
         if ($join['type'])
         {
@@ -1150,7 +1185,7 @@ abstract class Module_Database_Driver
         }
 
         // Quote the table name that is being joined
-        $sql .= ' '. $this->quote_table($join['table'],true) .' ON ';
+        $sql .= ' '. $this->quoteTable($join['table'], true) .' ON ';
 
         $conditions = array();
         foreach ($join['on'] as $condition)
@@ -1165,7 +1200,7 @@ abstract class Module_Database_Driver
             }
 
             // Quote each of the identifiers used for the condition
-            $conditions[] = $this->_quote_identifier($c1) . $op .' '. $this->_quote_identifier($c2);
+            $conditions[] = $this->_quoteIdentifier($c1) . $op .' '. $this->_quoteIdentifier($c2);
         }
 
         // Concat the conditions "... AND ..."
@@ -1180,7 +1215,7 @@ abstract class Module_Database_Driver
      * @param   array  $values updated values
      * @return  string
      */
-    protected function _compile_set(array $values)
+    protected function _compileSet(array $values)
     {
         $set = array();
         foreach ($values as $group)
@@ -1190,18 +1225,18 @@ abstract class Module_Database_Driver
 
             if ($op === '+' || $op === '-')
             {
-                $w_type = $op;
+                $type = $op;
             }
             else
             {
-                $w_type = '';
+                $type = '';
             }
 
-            $column = $this->_quote_identifier($column);
+            $column = $this->_quoteIdentifier($column);
 
-            if ($w_type)
+            if ($type)
             {
-                $set[$column] = $column .' = '. $column .' '. $w_type .' '. $this->quote($value);
+                $set[$column] = $column .' = '. $column .' '. $type .' '. $this->quote($value);
             }
             else
             {
@@ -1216,15 +1251,15 @@ abstract class Module_Database_Driver
     /**
      * 初始化所有的as_table
      */
-    protected function _init_as_table($builder)
+    protected function _initAsTable($builder)
     {
-        $this->_as_table = array();
+        $this->_asTable = array();
 
         if ($builder['from'])
         {
             foreach ($builder['from'] as $item)
             {
-                $this->_do_init_as_table($item);
+                $this->_doInitAsTable($item);
             }
         }
 
@@ -1232,12 +1267,12 @@ abstract class Module_Database_Driver
         {
             foreach ($builder['join'] as $item)
             {
-                $this->_do_init_as_table($item['table']);
+                $this->_doInitAsTable($item['table']);
             }
         }
     }
 
-    protected function _do_init_as_table($value)
+    protected function _doInitAsTable($value)
     {
         if (is_array($value))
         {
@@ -1245,11 +1280,11 @@ abstract class Module_Database_Driver
         }
         elseif (is_object($value))
         {
-            if ($value instanceof Database)
+            if ($value instanceof DB)
             {
                 $value = $value->compile();
             }
-            elseif ($value instanceof Database_Expression)
+            elseif ($value instanceof Expression)
             {
                 $value = $value->value();
             }
@@ -1275,14 +1310,14 @@ abstract class Module_Database_Driver
 
         if ($alias)
         {
-            $this->_as_table[] = $alias;
+            $this->_asTable[] = $alias;
         }
     }
 
     /**
      * 格式化高级查询参数到select里
      */
-    protected function _format_select_adv(&$builder)
+    protected function _formatSelectAdv(&$builder)
     {
         if ($builder['select_adv'])foreach ($builder['select_adv'] as $item)
         {
@@ -1295,30 +1330,29 @@ abstract class Module_Database_Driver
             }
             else if (preg_match('#^(.*) AS (.*)$#i', $item[0], $m))
             {
-                $column = $this->_quote_identifier($m[1]);
+                $column = $this->_quoteIdentifier($m[1]);
                 $alias  = $m[2];
             }
             else
             {
-                $column = $this->_quote_identifier($item[0]);
+                $column = $this->_quoteIdentifier($item[0]);
                 $alias = $item[0];
             }
 
             // 其它参数
             $args_str = '';
-            if (($count_item=count($item))>2)
+            if (($countItem = count($item)) > 2)
             {
-                for($i=2; $i<$count_item; $i++)
+                for($i=2; $i < $countItem; $i++)
                 {
-                    $args_str .= ','. $this->_quote_identifier($item[$i]);
+                    $args_str .= ','. $this->_quoteIdentifier($item[$i]);
                 }
             }
 
-            $builder['select'][] = array
-            (
-                Database::expr_value(strtoupper($item[1]) .'('. $this->_quote_identifier($column.$args_str) .')'),
+            $builder['select'][] = [
+                DB::exprValue(strtoupper($item[1]) .'('. $this->_quoteIdentifier($column.$args_str) .')'),
                 $alias,
-            );
+            ];
         }
     }
 
@@ -1328,7 +1362,7 @@ abstract class Module_Database_Driver
      * @param array $arr
      * @return string
      */
-    protected function _format_group_concat(&$builder)
+    protected function _formatGroupConcat(&$builder)
     {
         if ($builder['group_concat'])foreach($builder['group_concat'] as $item)
         {
@@ -1339,12 +1373,12 @@ abstract class Module_Database_Driver
             }
             else if (preg_match('#^(.*) AS (.*)$#i', $item[0] , $m))
             {
-                $column = $this->_quote_identifier($m[1]);
+                $column = $this->_quoteIdentifier($m[1]);
                 $alias  = $m[2];
             }
             else
             {
-                $column = $this->_quote_identifier($item[0]);
+                $column = $this->_quoteIdentifier($item[0]);
                 $alias  = $item[0];
             }
 
@@ -1358,21 +1392,309 @@ abstract class Module_Database_Driver
 
             if (isset($item[1]) && $item[1])
             {
-                $str .= ' ORDER BY '. $column .' '. (strtoupper($item[1])=='DESC'?'DESC':'ASC');
+                $str .= ' ORDER BY '. $column .' '. (strtoupper($item[1]) === 'DESC' ? 'DESC' : 'ASC');
             }
 
             if ($item[2])
             {
-                $str .= ' SEPARATOR '. $this->_quote_identifier($item[2]);
+                $str .= ' SEPARATOR '. $this->_quoteIdentifier($item[2]);
             }
 
             $str .= ')';
 
-            $builder['select'][] = array
-            (
-                Database::expr_value($str),
+            $builder['select'][] = [
+                DB::exprValue($str),
                 $alias,
-            );
+            ];
+        }
+    }
+
+
+    /**
+     * 触发一个预定义好的事件
+     *
+     *      $this->on('test', function(){echo "123";});
+     *      $this->trigger('test');
+     *      // 将会输出 123
+     *
+     * @param $event
+     * @param array $tmpRelyObject 临时依赖对象数组
+     * @return bool|mixed
+     */
+    public function trigger($event, array $tmpRelyObject = [])
+    {
+        if (isset($this->events[$event]))
+        {
+            # 执行前回调
+            if (isset($this->eventsBefore[$event]))
+            {
+                foreach ($this->eventsBefore[$event] as $item)
+                {
+                    try
+                    {
+                        $this->callFromInjector($item[0], $item[1], $tmpRelyObject);
+                    }
+                    catch (\Exception $e)
+                    {
+                        trigger_error($e->getMessage(), $e->getCode());
+                    }
+                }
+            }
+
+            # 执行主事件
+            list($injectors, $callback) = $this->events[$event];
+
+            $rs = $this->callFromInjector($injectors, $callback, $tmpRelyObject);
+
+            # 执行后回调
+            if (isset($this->eventsAfter[$event]))
+            {
+                foreach ($this->eventsAfter[$event] as $item)
+                {
+                    try
+                    {
+                        $this->callFromInjector($item[0], $item[1], $tmpRelyObject);
+                    }
+                    catch (\Exception $e)
+                    {
+                        trigger_error($e->getMessage(), $e->getCode());
+                    }
+                }
+            }
+
+            return $rs;
+        }
+        else
+        {
+            return false;
+        }
+    }
+
+
+    /**
+     * 定义一个事件调用
+     *
+     * @param $event
+     * @param $relyOrCallback
+     * @param null $callback
+     * @return $this
+     */
+    public function eventOn($event, $relyOrCallback, $callback = null)
+    {
+        if (null === $callback)
+        {
+            $callback  = $relyOrCallback;
+            $injectors = [];
+        }
+        else
+        {
+            $injectors = (array)$relyOrCallback;
+        }
+
+        $this->events[$event] = [$injectors, $callback];
+
+        return $this;
+    }
+
+    /**
+     * 释放事件调用
+     *
+     * @param $event
+     * @param bool|true $removeAfterAndBeforeEvent 是否同时移除after和before的事件
+     * @return $this
+     */
+    public function eventOff($event, $removeAfterAndBeforeEvent = true)
+    {
+        unset($this->events[$event]);
+
+        if ($removeAfterAndBeforeEvent)
+        {
+            unset($this->eventsAfter[$event]);
+            unset($this->eventsBefore[$event]);
+        }
+
+        return $this;
+    }
+
+    /**
+     * 立即执行一个自定义的方法
+     *
+     *      $this->call(['$db'], function($db){
+     *          //....
+     *      });
+     *
+     *      # 传入一个临时的依赖对象, 可以在本次临时覆盖已存在的依赖对象
+     *      $this->call(['$db', '$test'], function($db, $test) {
+     *          //....
+     *      }, ['$test' => 123]);
+     *
+     *      # 如果不是要临时覆盖已存在依赖对象, 推荐使用 use 方式, 例如:
+     *      $test = 123;
+     *      $this->call(['$db'], function($db) use ($test) {
+     *          //....
+     *      });
+     *
+     * @param array $rely 依赖的注入对象名称
+     * @param \Closure $callback 回调方法
+     * @param array $tmpRelyObject 临时依赖对象数组
+     * @return mixed
+     */
+    public function callFromInjector(array $rely, $callback, array $tmpRelyObject = [])
+    {
+        if ($tmpRelyObject)
+        {
+            # 依赖数据
+            $relyObj = $this->getInjector($rely, 1);
+            $obj     = [];
+            foreach ($rely as $key)
+            {
+                $obj[] = array_key_exists($key, $tmpRelyObject) ? $tmpRelyObject[$key] : $relyObj[$key];
+            }
+
+            return call_user_func_array($callback, $obj);
+        }
+        else
+        {
+            return call_user_func_array($callback, $this->getInjector($rely));
+        }
+    }
+
+    /**
+     * 设置一个注入器对象
+     *
+     * @param string|array $injector
+     * @param mixed $object
+     * @return $this
+     */
+    public function setInjector($injector, $object = null)
+    {
+        # 支持数组方式
+        if (is_array($injector))
+        {
+            foreach ($injector as $key => $value)
+            {
+                $this->setInjector($key, $value);
+            }
+
+            return $this;
+        }
+
+        if (is_object($object) && $object instanceof \Closure)
+        {
+            # 回调函数
+            $run = false;
+        }
+        else
+        {
+            $run = true;
+        }
+
+        $this->injectors[$injector] = [$run, $object];
+
+        return $this;
+    }
+
+    /**
+     * 移除一个注入器
+     *
+     * @param $injector
+     * @return $this
+     */
+    public function removeInjector($injector)
+    {
+        unset($this->injectors[$injector]);
+
+        return $this;
+    }
+
+    /**
+     * 获取一个注入器对象
+     *
+     * @param string|array $injector
+     * @param int $flag 当 `$inject` 参数是数组时有用, 0: 仅仅list模式, 1:仅map模式, 2:包括map方式也包括list方式(list序列在前map在后)
+     * @return array|null|mixed
+     */
+    public function getInjector($injector, $flag = 0)
+    {
+        if (is_array($injector))
+        {
+            $list    = [];
+            $listMap = [];
+            foreach($injector as $item)
+            {
+                if (isset($this->injectors[$item]))
+                {
+                    # 当前对象的依赖注入器
+                    unset($rs);
+                    $rs =& $this->injectors[$item];
+
+                    if (!$rs[0])
+                    {
+                        # 调用函数方法
+                        $fun   = $rs[1];
+                        $rs[0] = true;
+                        $rs[1] = $fun();
+                    }
+                    $di = $rs[1];
+                }
+                elseif (HAVE_MYQEE_CORE && \MyQEE\Service::exists($item))
+                {
+                    $di = \MyQEE\Site::instance()->injector->get($item, $flag);
+                }
+                else
+                {
+                    $di = null;
+                }
+
+                switch ($flag)
+                {
+                    case 1:
+                    case true:
+                        $list[$item] = $di;
+                        break;
+                    case 2:
+                        $list[] = $di;
+                        $listMap[$item] = $di;
+                        break;
+                    case 0:
+                    default:
+                        $list[] = $di;
+                        break;
+                }
+            }
+
+            if ($flag == 2)
+            {
+                $list += $listMap;
+            }
+
+            return $list;
+        }
+        else
+        {
+            if (isset($this->injectors[$injector]))
+            {
+                # 当前对象的依赖注入器
+                $rs =& $this->injectors[$injector];
+
+                if (!$rs[0])
+                {
+                    # 调用函数方法
+                    $fun   = $rs[1];
+                    $rs[0] = true;
+                    $rs[1] = $fun();
+                }
+
+                return $rs[1];
+            }
+            elseif (HAVE_MYQEE_CORE)
+            {
+                return \MyQEE\Site::instance()->injector->get($injector);
+            }
+            else
+            {
+                return null;
+            }
         }
     }
 }
