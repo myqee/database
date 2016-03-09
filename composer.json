@@ -12,6 +12,6 @@
     }
   ],
   "autoload": {
-    "psr-4": {"MyQEE\\Database\\": ""}
+    "psr-4": {"MyQEE\\Database\\": "src/"}
   }
 }
