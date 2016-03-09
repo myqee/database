@@ -251,7 +251,7 @@ class DB extends QueryBuilder
                 $driver = 'MySQLI';
             }
 
-            $driver = "\\MyQEE\\Database\\Driver_{$driver}_Factory";
+            $driver = "\\MyQEE\\Database\\{$driver}\\Factory";
         }
 
         if (!class_exists($driver, true))
