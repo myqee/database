@@ -216,8 +216,9 @@ class DB extends QueryBuilder
         {
             switch (strtolower($this->config['type']))
             {
+                case 'mysql':
                 case 'mysqli':
-                    $driver = 'MySQLI';
+                    $driver = 'MySQLi';
                     break;
 
                 case 'mongo':
@@ -236,10 +237,6 @@ class DB extends QueryBuilder
 
                 case 'sqlite':
                     $driver = 'SQLite';
-                    break;
-
-                case 'mysql':
-                    $driver = 'MySQL';
                     break;
 
                 default:
