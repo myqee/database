@@ -112,7 +112,7 @@ abstract class Driver
      * 记录hash对应的host数据
      * @var array
      */
-    protected static $_hashToHostName = [];
+    protected static $hashToHostName = [];
 
     public function __construct(array $config)
     {
@@ -142,7 +142,7 @@ abstract class Driver
      * @param array $inputParameters
      * @param null|bool|string $asObject
      * @param null|bool|string $connectionType
-     * @return Driver_MySQLI_Result
+     * @return Result
      */
     public function execute($statement, array $inputParameters, $asObject = null, $connectionType = null)
     {
@@ -190,22 +190,22 @@ abstract class Driver
         switch ($type)
         {
             case 'insert':
-                return $this->_compileInsert($builder);
+                return $this->compileInsert($builder);
 
             case'replace':
-                return $this->_compileInsert($builder, 'REPLACE');
+                return $this->compileInsert($builder, 'REPLACE');
 
             case'insert_update':
-                return $this->_compileInsert($builder, 'REPLACE', true);
+                return $this->compileInsert($builder, 'REPLACE', true);
 
             case 'update':
-                return $this->_compileDpdate($builder);
+                return $this->compileDpdate($builder);
 
             case 'delete':
-                return $this->_compileDelete($builder);
+                return $this->compileDelete($builder);
 
             default:
-                return $this->_compileSelect($builder);
+                return $this->compileSelect($builder);
         }
     }
 
@@ -214,14 +214,14 @@ abstract class Driver
      * @param string $sql 查询语句
      * @param bool|string $asObject 是否返回对象
      * @param bool|string $useMaster 是否使用主数据库，不设置则自动判断
-     * @return Driver_MySQLI_Result
+     * @return Result
      */
     abstract public function query($sql, $asObject = null, $useMaster = null);
 
     /**
      * 连接数据库
      *
-     * $use_connection_type 默认不传为自动判断，可传true/false,若传字符串(只支持a-z0-9的字符串)，则可以切换到另外一个连接，比如传other,则可以连接到$this->_connection_other_id所对应的ID的连接
+     * $useConnectionType 默认不传为自动判断，可传true/false,若传字符串(只支持a-z0-9的字符串)，则可以切换到另外一个连接，比如传other,则可以连接到 `$this->connectionOtherId` 所对应的ID的连接
      *
      * @param boolean $useConnectionType 是否使用主数据库
      */
@@ -251,8 +251,8 @@ abstract class Driver
      * @param   mixed  $value table name or array(table, alias)
      * @param   bool  $autoAsTable
      * @return  string
-     * @uses    Database::_quote_identifier
-     * @uses    Database::table_prefix
+     * @uses    DB::quoteIdentifier
+     * @uses    DB::tablePrefix
      */
     public function quoteTable($value, $autoAsTable = false)
     {
@@ -278,7 +278,7 @@ abstract class Driver
             }
         }
 
-        return $this->_quoteIdentifier($value);
+        return $this->quoteIdentifier($value);
     }
 
     /**
@@ -287,11 +287,6 @@ abstract class Driver
      * $db->quote(null);   // NULL
      * $db->quote(10);     // 10
      * $db->quote('fred'); // 'fred'
-     *
-     * Objects passed to this function will be converted to strings.
-     * [Database_Expression] objects will use the value of the expression.
-     * [Database_Query] objects will be compiled and converted to a sub-query.
-     * All other objects will be converted using the `__toString` method.
      *
      * @param   mixed  $value any value to quote
      * @return  string
@@ -397,7 +392,7 @@ abstract class Driver
 
         if (!isset($support[$this->config['type']]))
         {
-            $className = '\\MyQEE\\Database\\Driver_'. $this->config['type'] .'_Transaction';
+            $className = '\\MyQEE\\Database\\'. $this->config['type'] .'\\Transaction';
             $support[$this->config['type']] = class_exists($className, true) ? $className : false;
         }
 
@@ -432,7 +427,7 @@ abstract class Driver
         {
             $charset = $this->config['charset'];
         }
-        $sql = 'CREATE DATABASE ' . $this->_quoteIdentifier($database) .' DEFAULT CHARACTER SET '. $charset;
+        $sql = 'CREATE DATABASE ' . $this->quoteIdentifier($database) .' DEFAULT CHARACTER SET '. $charset;
 
         if ($collate)
         {
@@ -468,7 +463,7 @@ abstract class Driver
      * @param array $excludeHosts 排除的HOST
      * @param string $type 配置类型
      */
-    protected function _getRandHost($excludeHosts = [], $type = null)
+    protected function getRandHost($excludeHosts = [], $type = null)
     {
         if (!$type)$type = $this->connectionType;
         $hostname = $this->config['connection']['hostname'];
@@ -483,7 +478,7 @@ abstract class Driver
             if ($excludeHosts && $type !== 'master' && in_array($hostname, $excludeHosts))
             {
                 # 如果相应的slave都已不可获取，则改由获取master
-                return $this->_getRandHost($excludeHosts, 'master');
+                return $this->getRandHost($excludeHosts, 'master');
             }
 
             return $hostname;
@@ -505,7 +500,7 @@ abstract class Driver
             {
                 if ($type !== 'master')
                 {
-                    return $this->_getRandHost($excludeHosts, 'master');
+                    return $this->getRandHost($excludeHosts, 'master');
                 }
                 else
                 {
@@ -537,11 +532,11 @@ abstract class Driver
      * @param string $username
      * @return string
      */
-    protected function _getConnectionHash($hostname, $port, $username)
+    protected function getConnectionHash($hostname, $port, $username)
     {
         $hash = sha1(get_class($this) .'_'. $hostname .'_'. $port .'_'. $username);
 
-        self::$_hashToHostName[$hash] = [
+        self::$hashToHostName[$hash] = [
             'host'     => $hostname,
             'port'     => $port,
             'username' => $username,
@@ -558,7 +553,7 @@ abstract class Driver
      */
     protected static function getHostnameByConnectionHash($hash)
     {
-        return self::$_hashToHostName[$hash];
+        return self::$hashToHostName[$hash];
     }
 
     /**
@@ -598,7 +593,7 @@ abstract class Driver
      *
      * @param boolean|string $connectionType
      */
-    protected function _setConnectionType($connectionType)
+    protected function setConnectionType($connectionType)
     {
         if (true === $connectionType)
         {
@@ -616,7 +611,7 @@ abstract class Driver
         $this->connectionType = $connectionType;
     }
 
-    protected function _getQueryType($sql, & $connectionType)
+    protected function getQueryType($sql, & $connectionType)
     {
         if (preg_match('#^([a-z]+)(:? |\n|\r)#i', $sql, $m))
         {
@@ -668,7 +663,7 @@ abstract class Driver
         return $type;
     }
 
-    protected function _quoteIdentifier($column)
+    protected function quoteIdentifier($column)
     {
         if (is_array($column))
         {
@@ -690,7 +685,7 @@ abstract class Driver
             else
             {
                 // Convert the object to a string
-                $column = $this->_quoteIdentifier((string)$column);
+                $column = $this->quoteIdentifier((string)$column);
             }
         }
         else
@@ -711,7 +706,7 @@ abstract class Driver
             elseif (strpos($column, '"') !== false)
             {
                 // Quote the column in FUNC("column") identifiers
-                $column = preg_replace('/"(.+?)"/e', '$this->_quote_identifier("$1")', $column);
+                $column = preg_replace('/"(.+?)"/e', '$this->quoteIdentifier("$1")', $column);
             }
             elseif (strpos($column, '.') !== false)
             {
@@ -757,9 +752,9 @@ abstract class Driver
         return $column;
     }
 
-    protected function _compileSelect($builder)
+    protected function compileSelect($builder)
     {
-        $quoteIdentifier = [$this, '_quoteIdentifier'];
+        $quoteIdentifier = [$this, 'quoteIdentifier'];
 
         $quoteTable = [$this, 'quoteTable'];
 
@@ -780,9 +775,9 @@ abstract class Driver
             }
         }
 
-        $this->_initAsTable($builder);
-        $this->_formatSelectAdv($builder);
-        $this->_formatGroupConcat($builder);
+        $this->initAsTable($builder);
+        $this->formatSelectAdv($builder);
+        $this->formatGroupConcat($builder);
 
         if (empty($builder['select']))
         {
@@ -803,20 +798,20 @@ abstract class Driver
         {
             foreach ($builder['index'] as $item)
             {
-                $query .= ' '. strtoupper($item[1]) .' INDEX('. $this->_quoteIdentifier($item[0]) .')';
+                $query .= ' '. strtoupper($item[1]) .' INDEX('. $this->quoteIdentifier($item[0]) .')';
             }
         }
 
         if (!empty($builder['join']))
         {
             // Add tables to join
-            $query .= ' '. $this->_compileJoin($builder['join']);
+            $query .= ' '. $this->compileJoin($builder['join']);
         }
 
         if (!empty($builder['where']))
         {
             // Add selection conditions
-            $query .= ' WHERE '. $this->_compileConditions($builder['where']);
+            $query .= ' WHERE '. $this->compileConditions($builder['where']);
         }
 
         if (!empty($builder['group_by']))
@@ -828,18 +823,18 @@ abstract class Driver
         if (!empty($builder['having']))
         {
             // Add filtering conditions
-            $query .= ' HAVING '. $this->_compileConditions($builder['having']);
+            $query .= ' HAVING '. $this->compileConditions($builder['having']);
         }
 
         if (!empty($builder['order_by']))
         {
             // Add sorting
-            $query .= ' '. $this->_compileOrderBy($builder['order_by']);
+            $query .= ' '. $this->compileOrderBy($builder['order_by']);
         }
         elseif ($builder['where'])
         {
             # 如果查询中有in查询，采用自动排序方式
-            $in_query = null;
+            $inQuery = null;
             foreach ($builder['where'] as $item)
             {
                 if (isset($item['AND']) && $item['AND'][1] === 'in')
@@ -847,14 +842,14 @@ abstract class Driver
                     if (count($item['AND'][1]) > 1)
                     {
                         # 大于1项才需要排序
-                        $in_query = $item['AND'];
+                        $inQuery = $item['AND'];
                     }
                     break;
                 }
             }
-            if ($in_query)
+            if ($inQuery)
             {
-                $query .= ' ORDER BY FIELD('. $this->_quoteIdentifier($in_query[0]) .', '. implode(', ', $this->quote($in_query[2])) .')';
+                $query .= ' ORDER BY FIELD('. $this->quoteIdentifier($inQuery[0]) .', '. implode(', ', $this->quote($inQuery[2])) .')';
             }
         }
 
@@ -881,7 +876,7 @@ abstract class Driver
      * @param bool $insertUpdate
      * @return string
      */
-    protected function _compileInsert($builder, $type = 'INSERT', $insertUpdate = false)
+    protected function compileInsert($builder, $type = 'INSERT', $insertUpdate = false)
     {
         if ($this->mysql && $insertUpdate)
         {
@@ -899,7 +894,7 @@ abstract class Driver
         $query = $type_string . ' INTO ' . $this->quoteTable($builder['table'], false);
 
         // Add the column names
-        $query .= ' (' . implode(', ', array_map([$this, '_quoteIdentifier'], $builder['columns'])) .') ';
+        $query .= ' (' . implode(', ', array_map([$this, 'quoteIdentifier'], $builder['columns'])) .') ';
 
         if (is_array($builder['values']))
         {
@@ -932,12 +927,12 @@ abstract class Driver
             if (!empty($builder['where']))
             {
                 // Add selection conditions
-                $query .= ' WHERE '. $this->_compileConditions($builder['where']);
+                $query .= ' WHERE '. $this->compileConditions($builder['where']);
             }
 
             if ($this->mysql && $insertUpdate)
             {
-                $query .= ' '. $this->_compileOnDuplicateKeyUpdate($builder);
+                $query .= ' '. $this->compileOnDuplicateKeyUpdate($builder);
             }
         }
 
@@ -950,14 +945,14 @@ abstract class Driver
      * @param $builder
      * @return string
      */
-    protected function _compileOnDuplicateKeyUpdate($builder)
+    protected function compileOnDuplicateKeyUpdate($builder)
     {
         $query = 'ON DUPLICATE KEY UPDATE ';
 
         $groups = array();
         foreach ($builder['columns'] as $column)
         {
-            $c = $this->_quoteIdentifier($column);
+            $c = $this->quoteIdentifier($column);
 
             $groups[] = "{$c} = VALUES({$c})";
         }
@@ -965,24 +960,24 @@ abstract class Driver
         return $query . implode(', ', $groups);
     }
 
-    protected function _compileDpdate($builder)
+    protected function compileDpdate($builder)
     {
         // Start an update query
         $query = 'UPDATE '. $this->quoteTable($builder['table'], false);
 
         // Add the columns to update
-        $query .= ' SET '. $this->_compileSet($builder['set']);
+        $query .= ' SET '. $this->compileSet($builder['set']);
 
         if (!empty($builder['where']))
         {
             // Add selection conditions
-            $query .= ' WHERE '. $this->_compileConditions($builder['where']);
+            $query .= ' WHERE '. $this->compileConditions($builder['where']);
         }
 
         if (!empty($builder['order_by']))
         {
             // Add sorting
-            $query .= ' '. $this->_compileOrderBy($builder['order_by']);
+            $query .= ' '. $this->compileOrderBy($builder['order_by']);
         }
 
         if ($builder['limit'] !== null)
@@ -1000,17 +995,17 @@ abstract class Driver
         return $query;
     }
 
-    protected function _compileDelete($builder)
+    protected function compileDelete($builder)
     {
         // Start an update query
         $query = 'DELETE FROM'. $this->quoteTable($builder['table'], false);
 
         if (!empty($builder['where']))
         {
-            $this->_initAsTable($builder);
+            $this->initAsTable($builder);
 
             // Add selection conditions
-            $query .= ' WHERE '. $this->_compileConditions($builder['where']);
+            $query .= ' WHERE '. $this->compileConditions($builder['where']);
         }
 
         return $query;
@@ -1022,7 +1017,7 @@ abstract class Driver
      * @param   array  $columns sorting columns
      * @return  string
      */
-    protected function _compileOrderBy(array $columns)
+    protected function compileOrderBy(array $columns)
     {
         $sort = array();
         foreach ($columns as $group)
@@ -1035,7 +1030,7 @@ abstract class Driver
                 $direction = ' '. strtoupper($direction);
             }
 
-            $sort[] = $this->_quoteIdentifier($column) . $direction;
+            $sort[] = $this->quoteIdentifier($column) . $direction;
         }
 
         return 'ORDER BY '. implode(', ', $sort);
@@ -1048,7 +1043,7 @@ abstract class Driver
      * @param   array  $conditions condition statements
      * @return  string
      */
-    protected function _compileConditions(array $conditions)
+    protected function compileConditions(array $conditions)
     {
         $lastCondition = null;
 
@@ -1145,7 +1140,7 @@ abstract class Driver
                     }
 
                     // Append the statement to the query
-                    $sql .= $this->_quoteIdentifier($column) .' '. $op .' '. $value;
+                    $sql .= $this->quoteIdentifier($column) .' '. $op .' '. $value;
                 }
 
                 $lastCondition = $condition;
@@ -1161,19 +1156,19 @@ abstract class Driver
      * @param   array  $joins join statements
      * @return  string
      */
-    protected function _compileJoin(array $joins)
+    protected function compileJoin(array $joins)
     {
         $statements = array();
 
         foreach ($joins as $join)
         {
-            $statements[] = $this->_compileJoinOn($join);
+            $statements[] = $this->compileJoinOn($join);
         }
 
         return implode(' ', $statements);
     }
 
-    protected function _compileJoinOn($join)
+    protected function compileJoinOn($join)
     {
         if ($join['type'])
         {
@@ -1200,7 +1195,7 @@ abstract class Driver
             }
 
             // Quote each of the identifiers used for the condition
-            $conditions[] = $this->_quoteIdentifier($c1) . $op .' '. $this->_quoteIdentifier($c2);
+            $conditions[] = $this->quoteIdentifier($c1) . $op .' '. $this->quoteIdentifier($c2);
         }
 
         // Concat the conditions "... AND ..."
@@ -1215,7 +1210,7 @@ abstract class Driver
      * @param   array  $values updated values
      * @return  string
      */
-    protected function _compileSet(array $values)
+    protected function compileSet(array $values)
     {
         $set = array();
         foreach ($values as $group)
@@ -1232,7 +1227,7 @@ abstract class Driver
                 $type = '';
             }
 
-            $column = $this->_quoteIdentifier($column);
+            $column = $this->quoteIdentifier($column);
 
             if ($type)
             {
@@ -1251,7 +1246,7 @@ abstract class Driver
     /**
      * 初始化所有的as_table
      */
-    protected function _initAsTable($builder)
+    protected function initAsTable($builder)
     {
         $this->_asTable = array();
 
@@ -1259,7 +1254,7 @@ abstract class Driver
         {
             foreach ($builder['from'] as $item)
             {
-                $this->_doInitAsTable($item);
+                $this->doInitAsTable($item);
             }
         }
 
@@ -1267,12 +1262,12 @@ abstract class Driver
         {
             foreach ($builder['join'] as $item)
             {
-                $this->_doInitAsTable($item['table']);
+                $this->doInitAsTable($item['table']);
             }
         }
     }
 
-    protected function _doInitAsTable($value)
+    protected function doInitAsTable($value)
     {
         if (is_array($value))
         {
@@ -1317,7 +1312,7 @@ abstract class Driver
     /**
      * 格式化高级查询参数到select里
      */
-    protected function _formatSelectAdv(&$builder)
+    protected function formatSelectAdv(& $builder)
     {
         if ($builder['select_adv'])foreach ($builder['select_adv'] as $item)
         {
@@ -1330,12 +1325,12 @@ abstract class Driver
             }
             else if (preg_match('#^(.*) AS (.*)$#i', $item[0], $m))
             {
-                $column = $this->_quoteIdentifier($m[1]);
+                $column = $this->quoteIdentifier($m[1]);
                 $alias  = $m[2];
             }
             else
             {
-                $column = $this->_quoteIdentifier($item[0]);
+                $column = $this->quoteIdentifier($item[0]);
                 $alias = $item[0];
             }
 
@@ -1345,12 +1340,12 @@ abstract class Driver
             {
                 for($i=2; $i < $countItem; $i++)
                 {
-                    $args_str .= ','. $this->_quoteIdentifier($item[$i]);
+                    $args_str .= ','. $this->quoteIdentifier($item[$i]);
                 }
             }
 
             $builder['select'][] = [
-                DB::exprValue(strtoupper($item[1]) .'('. $this->_quoteIdentifier($column.$args_str) .')'),
+                DB::exprValue(strtoupper($item[1]) .'('. $this->quoteIdentifier($column.$args_str) .')'),
                 $alias,
             ];
         }
@@ -1362,7 +1357,7 @@ abstract class Driver
      * @param array $arr
      * @return string
      */
-    protected function _formatGroupConcat(&$builder)
+    protected function formatGroupConcat(&$builder)
     {
         if ($builder['group_concat'])foreach($builder['group_concat'] as $item)
         {
@@ -1373,12 +1368,12 @@ abstract class Driver
             }
             else if (preg_match('#^(.*) AS (.*)$#i', $item[0] , $m))
             {
-                $column = $this->_quoteIdentifier($m[1]);
+                $column = $this->quoteIdentifier($m[1]);
                 $alias  = $m[2];
             }
             else
             {
-                $column = $this->_quoteIdentifier($item[0]);
+                $column = $this->quoteIdentifier($item[0]);
                 $alias  = $item[0];
             }
 
@@ -1397,7 +1392,7 @@ abstract class Driver
 
             if ($item[2])
             {
-                $str .= ' SEPARATOR '. $this->_quoteIdentifier($item[2]);
+                $str .= ' SEPARATOR '. $this->quoteIdentifier($item[2]);
             }
 
             $str .= ')';

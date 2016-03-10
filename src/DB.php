@@ -21,7 +21,7 @@ class DB extends QueryBuilder
     /**
      * 驱动对象
      *
-     * @var Driver_MySQLI_Factory
+     * @var Driver
      */
     protected $driver;
 
@@ -245,10 +245,10 @@ class DB extends QueryBuilder
 
             if (!$driver)
             {
-                $driver = 'MySQLI';
+                $driver = 'MySQLi';
             }
 
-            $driver = "\\MyQEE\\Database\\{$driver}\\Factory";
+            $driver = "\\MyQEE\\Database\\{$driver}\\Driver";
         }
 
         if (!class_exists($driver, true))

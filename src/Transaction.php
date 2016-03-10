@@ -14,13 +14,15 @@ abstract class Transaction
 {
     /**
      * 唯一ID
+     *
      * @var $id string
      */
     protected $id;
 
     /**
      * 数据库驱动
-     * @var Driver_MySQLI_Factory
+     *
+     * @var Driver
      */
     protected $driver;
 

@@ -16,14 +16,14 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
      *
      * @var array
      */
-    protected $_config;
+    protected $config;
 
     /**
      * 查询语句
      *
      * @var string
      */
-    protected $_query;
+    protected $query;
 
     /**
      * 返回内容的指针
@@ -37,14 +37,14 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
      *
      * @var array
      */
-    protected $_data = array();
+    protected $data = [];
 
     /**
      * 返回总行数
      *
      * @var int
      */
-    protected $_totalRows;
+    protected $totalRows;
 
     /**
      * 当前行数
@@ -60,27 +60,27 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
      */
     protected $internalRow = 0;
 
-    protected $_asObject = null;
+    protected $asObject = null;
 
     /**
      * 标记是否指针模式
      *
      * @var bool
      */
-    protected $_cursorMode = false;
+    protected $cursorMode = false;
 
     /**
      * 数据是否需要转换编码
      *
      * @var boolean
      */
-    protected $_charsetNeedChange = false;
+    protected $charsetNeedChange = false;
 
     /**
      * 指定是二进制数据的key，在自动转码时会或略相应的字段
      * @var array
      */
-    protected $_charsetBinField = [];
+    protected $charsetBinField = [];
 
     /**
      * Sets the total number of rows and stores the result locally.
@@ -94,24 +94,24 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
      */
     public function __construct($result, $sql, $asObject , $config)
     {
-        $this->result  = $result;
-        $this->_query  = $sql;
-        $this->_config = $config;
+        $this->result = $result;
+        $this->query  = $sql;
+        $this->config = $config;
 
         if (is_object($asObject))
         {
             $asObject = get_class($asObject);
         }
 
-        $this->_asObject = $asObject;
+        $this->asObject = $asObject;
 
-        if ($this->_config['auto_change_charset'] && $this->_config['charset'] !== 'UTF8')
+        if ($this->config['auto_change_charset'] && $this->config['charset'] !== 'UTF8')
         {
-            $this->_charsetNeedChange = true;
+            $this->charsetNeedChange = true;
         }
         else
         {
-            $this->_charsetNeedChange = false;
+            $this->charsetNeedChange = false;
         }
     }
 
@@ -175,7 +175,7 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
      */
     public function cursorMode()
     {
-        $this->_cursorMode = true;
+        $this->cursorMode = true;
 
         return $this;
     }
@@ -191,34 +191,34 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
 
         $this->internalRow ++;
 
-        if ($this->_data && array_key_exists($this->currentRow, $this->_data))
+        if ($this->data && array_key_exists($this->currentRow, $this->data))
         {
-            return $this->_data[$this->currentRow];
+            return $this->data[$this->currentRow];
         }
 
         $data = $this->fetchAssoc();
 
-        if ($this->_charsetNeedChange)
+        if ($this->charsetNeedChange)
         {
             $this->_changeDataCharset($data);
         }
 
-        if (true === $this->_asObject)
+        if (true === $this->asObject)
         {
             # 返回默认对象
             $data = new \stdClass($data);
         }
-        elseif (is_string($this->_asObject))
+        elseif (is_string($this->asObject))
         {
             # 返回指定对象
-            $data = new $this->_asObject($data);
+            $data = new $this->asObject($data);
         }
 
-        if (!$this->_cursorMode)
+        if (!$this->cursorMode)
         {
-            $this->_data[$this->currentRow] = $data;
+            $this->data[$this->currentRow] = $data;
 
-            if ($this->count() === count($this->_data))
+            if ($this->count() === count($this->data))
             {
                 # 释放资源
                 $this->releaseResource();
@@ -257,7 +257,7 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
         }
         elseif (null === $key)
         {
-            if ($this->_asObject)
+            if ($this->asObject)
             {
                 foreach ($this as $row)
                 {
@@ -272,9 +272,9 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
                 }
             }
         }
-        elseif (null===$value)
+        elseif (null === $value)
         {
-            if ($this->_asObject)
+            if ($this->asObject)
             {
                 foreach ($this as $row)
                 {
@@ -291,7 +291,7 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
         }
         else
         {
-            if ($this->_asObject)
+            if ($this->asObject)
             {
                 foreach ($this as $row)
                 {
@@ -331,7 +331,7 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
     {
         $row = $this->current();
 
-        if ($this->_asObject)
+        if ($this->asObject)
         {
             if (isset($row->$name))return $row->$name;
         }
@@ -352,11 +352,11 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
      */
     public function count()
     {
-        if (null===$this->_totalRows)
+        if (null===$this->totalRows)
         {
-            $this->_totalRows = $this->totalCount();
+            $this->totalRows = $this->totalCount();
         }
-        return $this->_totalRows;
+        return $this->totalRows;
     }
 
     /**
@@ -383,7 +383,7 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
      */
     public function offsetGet($offset)
     {
-        if ($this->_data && array_key_exists($offset, $this->_data))return $this->_data[$offset];
+        if ($this->data && array_key_exists($offset, $this->data))return $this->data[$offset];
 
         if (!$this->seek($offset)) return null;
 
@@ -517,7 +517,7 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
         {
             foreach ($data as $key => &$item)
             {
-                if ($this->_charsetBinField && isset($this->_charsetBinField[$key]))
+                if ($this->charsetBinField && isset($this->charsetBinField[$key]))
                 {
                     continue;
                 }
@@ -534,11 +534,11 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
 
             if ($mb)
             {
-                $data = mb_convert_encoding($data, 'UTF-8', $this->_config['data_charset']);
+                $data = mb_convert_encoding($data, 'UTF-8', $this->config['data_charset']);
             }
             else
             {
-                $data = iconv($this->_config['data_charset'], 'UTF-8//IGNORE', $data);
+                $data = iconv($this->config['data_charset'], 'UTF-8//IGNORE', $data);
             }
         }
     }
@@ -560,7 +560,7 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
         $keys = func_get_args();
         foreach ($keys as $key)
         {
-            $this->_charsetBinField[$key] = true;
+            $this->charsetBinField[$key] = true;
         }
         return $this;
     }
