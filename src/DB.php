@@ -55,35 +55,14 @@ class DB extends QueryBuilder
      *
      * @var array
      */
-    protected static $slowQueries = array();
+    protected static $slowQueries = [];
 
     /**
-     * 查询事件
+     * 所有的配置
      *
-     * @var string
+     * @var array
      */
-    const EVENT_QUERY = 'query';
-
-    /**
-     * 连接数据库事件
-     *
-     * @var string
-     */
-    const EVENT_CONNECT = 'connect';
-
-    /**
-     * 构造SQL语句事件
-     *
-     * @var string
-     */
-    const EVENT_COMPILE = 'compile';
-
-    /**
-     * 安全的执行SQL模板查询事件
-     *
-     * @var string
-     */
-    const EVENT_EXECUTE = 'execute';
+    protected static $allConfig = [];
 
     /**
      * 默认配置名
@@ -92,18 +71,11 @@ class DB extends QueryBuilder
      */
     const DEFAULT_CONFIG_NAME = 'default';
 
-    /**
-     * 关闭链接
-     *
-     * @var string
-     */
-    const EVENT_CLOSE_CONNECT = 'close_connect';
-
 
     /**
      * 返回数据库实例化对象
      *
-     * 支持 `Database::instance('mysqli://root:123456@127.0.0.1/myqee/');` 的方式
+     * 支持 `DB::instance('mysqli://root:123456@127.0.0.1/myqee/');` 的方式
      *
      * @param string $configName 默认值为 Database::DEFAULT_CONFIG_NAME
      * @return DB
@@ -121,7 +93,7 @@ class DB extends QueryBuilder
         }
         else
         {
-            $name = '.config_' . md5(serialize($configName));
+            $name = '.config.' . md5(serialize($configName));
         }
 
         if (!isset(static::$instances[$name]))
@@ -146,9 +118,9 @@ class DB extends QueryBuilder
     }
 
     /**
-     * new Database('default');
+     * new DB('default');
      *
-     * 支持 `new Database('mysqli://root:123456@127.0.0.1/myqee/');` 的方式
+     * 支持 `new DB('mysqli://root:123456@127.0.0.1/myqee/');` 的方式
      *
      * @param string $configName 默认值为 `Database::DEFAULT_CONFIG_NAME`
      * @return  void
@@ -176,8 +148,12 @@ class DB extends QueryBuilder
                 'table_prefix' => '',
                 'charset'      => 'utf8',
                 'caching'      => false,
-                'profiling'    => true,
+                'profiling'    => false,
             ];
+        }
+        elseif (static::$allConfig && isset(static::$allConfig[$configName]))
+        {
+            $this->config = static::$allConfig[$configName];
         }
         elseif (HAVE_MYQEE_CORE)
         {
@@ -218,6 +194,8 @@ class DB extends QueryBuilder
             {
                 case 'mysql':
                 case 'mysqli':
+                case 'maria':
+                case 'mariadb':
                     $driver = 'MySQLi';
                     break;
 
@@ -264,6 +242,13 @@ class DB extends QueryBuilder
         if (is_string($this->config['connection']))
         {
             $this->config['connection'] = static::parseDsn($this->config['connection']);
+
+            unset($this->config['connection']['type']);
+            if (isset($this->config['connection']['extra']))
+            {
+                $this->config += $this->config['connection']['extra'];
+                unset($this->config['connection']['extra']);
+            }
         }
 
         # 当前驱动
@@ -283,7 +268,7 @@ class DB extends QueryBuilder
     /**
      * 获取驱动引擎对象
      *
-     * @return Driver_MySQLI_Factory
+     * @return Driver
      */
     public function driver()
     {
@@ -307,7 +292,10 @@ class DB extends QueryBuilder
      */
     public function closeConnect()
     {
-        $this->driver->trigger(static::EVENT_CLOSE_CONNECT);
+        if ($this->driver)
+        {
+            $this->driver->closeConnect();
+        }
 
         return $this;
     }
@@ -336,31 +324,24 @@ class DB extends QueryBuilder
      *
      * @param array $inputParameters
      * @param bool $asObject
-     * @param null $useMaster
+     * @param null $connectionType
      * @return Result
      */
-    public function execute(array $inputParameters = [], $asObject = false, $useMaster = null)
+    public function execute(array $inputParameters = [], $asObject = false, $connectionType = null)
     {
-        if (!$this->_builder['statement'])
+        if (!$this->builder['statement'])
         {
             throw new Exception('You need run `$db->prepare($statement)` before execute.');
         }
 
-        if (null === $useMaster && true === $this->isAutoUseMaster)
+        if (null === $connectionType && true === $this->isAutoUseMaster)
         {
-            $useMaster = true;
+            $connectionType = true;
         }
 
         $time = $this->startSlowQuery();
 
-        $rely = [
-            '$statement'       => $this->_builder['statement'],
-            '$inputParameters' => $inputParameters,
-            '$asObject'        => $asObject,
-            '$useMaster'       => $useMaster,
-        ];
-
-        $rs = $this->driver->trigger(static::EVENT_EXECUTE, $rely);
+        $rs = $this->driver->execute($this->builder['statement'], $inputParameters, $asObject, $connectionType);
 
         if (false !== $time)
         {
@@ -377,27 +358,21 @@ class DB extends QueryBuilder
      *
      *      $db->query('select * from my_table where id = 10');
      *
-     * @param string $sql
+     * @param string|DB|QueryBuilder $sql
      * @param boolean $asObject 返回对象名称 默认false，即返回数组
-     * @param boolean $useMaster 是否使用主数据库，不设置则自动判断,对更新的SQL无效
+     * @param string $clusterName 使用集群, true 则使用主数据库, 例如 slave, master 等, 确保数据库相关配置中包括对应集群
      * @return Result
      */
-    public function query($sql, $asObject = false, $useMaster = null)
+    public function query($sql, $asObject = false, $clusterName = null)
     {
-        if (null === $useMaster && true === $this->isAutoUseMaster)
+        if (null === $clusterName && true === $this->isAutoUseMaster)
         {
-            $useMaster = true;
+            $clusterName = true;
         }
 
         $time = $this->startSlowQuery();
 
-        $rely = [
-            '$sql'        => $sql,
-            '$asObject'   => $asObject,
-            '$userMaster' => $useMaster,
-        ];
-
-        $rs = $this->driver->trigger(static::EVENT_QUERY, $rely);
+        $rs = $this->driver->query($sql, $asObject, $clusterName);
 
         if (false !== $time)
         {
@@ -421,31 +396,13 @@ class DB extends QueryBuilder
      * 解析为SQL语句
      *
      * @see QueryBuilder::compile()
-     * @param string $type select,insert,update,delect,replace
-     * @param boolean $useMaster 当$type=select此参数有效，设置true则使用主数据库，设置false则使用从数据库，不设置则使用默认
+     * @param string $type select, insert, update, delete, replace
      * @return  string
      */
-    public function compile($type = 'select', $useMaster = null)
+    public function compile($type = 'select')
     {
-        if ($type === 'select' && null === $useMaster && true === $this->isAutoUseMaster)
-        {
-            $useMaster = true;
-        }
-
-        $rely = [
-            '$type'      => $type,
-            '$useMaster' => $useMaster,
-            '$builder'   => $this->_builder,
-        ];
-
-        # 先连接数据库，因为在 compile 时需要用到 mysql_real_escape_string, mysqli_real_escape_string 方法
-        $this->driver->trigger(static::EVENT_CONNECT, $rely);
-
         # 获取查询SQL
-        $sql = $this->driver->trigger(static::EVENT_COMPILE, $rely);
-
-        # 重置QueryBuilder
-        $this->reset();
+        $sql = $this->driver->compile($this->getAndResetBuilder(), $type);
 
         return $sql;
     }
@@ -454,24 +411,24 @@ class DB extends QueryBuilder
      * 获取数据
      *
      * @param boolean $asObject 返回对象名称 默认false，即返回数组
-     * @param boolean $useMaster 是否使用主数据库，不设置则自动判断
+     * @param string $clusterName 使用集群, true 则使用主数据库, 例如 slave, master 等, 确保数据库相关配置中包括对应集群
      * @return Result
      */
-    public function get($asObject = false, $useMaster = null)
+    public function get($asObject = false, $clusterName = null)
     {
-        return $this->query($this->compile('select', $useMaster), $asObject, $useMaster);
+        return $this->query($this, $asObject, $clusterName);
     }
 
     /**
      * 获取一条数据
      *
      * @param boolean $asObject 返回对象名称 默认false，即返回数组
-     * @param boolean $useMaster 是否使用主数据库，不设置则自动判断
+     * @param string $clusterName 使用集群, true 则使用主数据库, 例如 slave, master 等, 确保数据库相关配置中包括对应集群
      * @return array|object|\stdClass
      */
-    public function getSingle($asObject = false, $useMaster = null)
+    public function getSingle($asObject = false, $clusterName = null)
     {
-        return $this->get($asObject, $useMaster)->current();
+        return $this->get($asObject, $clusterName)->current();
     }
 
     /**
@@ -509,7 +466,7 @@ class DB extends QueryBuilder
             $this->where($where);
         }
 
-        $sql = $this->compile('update', true);
+        $sql = $this->compile('update');
 
         return $this->query($sql, false, true);
     }
@@ -535,7 +492,7 @@ class DB extends QueryBuilder
             $this->values($value);
         }
 
-        $sql = $this->compile('insert', true);
+        $sql = $this->compile('insert');
 
         return $this->query($sql, false, true);
     }
@@ -559,7 +516,7 @@ class DB extends QueryBuilder
             $this->where($where);
         }
 
-        $sql = $this->compile('delete', true);
+        $sql = $this->compile('delete');
 
         return $this->query($sql, false, true);
     }
@@ -595,14 +552,14 @@ class DB extends QueryBuilder
         }
 
         // 记录当前builder信息
-        $builder = $this->_builder;
+        $builder = $this->builder;
 
         $this->select($this->exprValue('COUNT(1) AS `total_row_count`'));
 
         $count = (int)$this->query($this->compile('select'), false)->get('total_row_count');
 
         // 将之前获取的builder信息放倒_builder_bak上，以便可使用->recovery_last_builder()方法恢复前一个builder
-        $this->_builderBak = $builder;
+        $this->builderBak = $builder;
 
         return $count;
     }
@@ -659,7 +616,7 @@ class DB extends QueryBuilder
             $this->where($where);
         }
 
-        $sql = $this->compile($insertOnDuplicateKeyUpdateMode ? 'insert_update' : 'replace', true);
+        $sql = $this->compile($insertOnDuplicateKeyUpdateMode ? 'insert_update' : 'replace');
 
         return $this->query($sql, false, true);
     }
@@ -785,6 +742,147 @@ class DB extends QueryBuilder
     }
 
     /**
+     * 加载文本数据库配置
+     *
+     * 文本配置内容范例
+     *
+     *      [default]
+     *      ;连接1
+     *      mysql://root:123456@127.0.0.1:3306/test/?charset=utf8
+     *
+     *      [mongo]
+     *      ;连接2
+     *      mongo://127.0.0.1/test/?charset=utf8
+     *
+     *      ; 连接1的从库
+     *      [default.slave]
+     *      mysql://192.168.1.3/?weight=30
+     *      mysql://user1:pass1@192.168.1.5:3307/
+     *      mysql://user:pass@192.168.1.4:3333/
+     *
+     *      ; 连接1的搜索库
+     *      [default.search]
+     *      mysql://192.168.1.5/?weight=30
+     *      mysql://192.168.1.6/?weight=40
+     *      mysql://192.168.1.7/?weight=40
+     *      mysql://192.168.1.7/?weight=50
+     *
+     *      ; 连接2的从库
+     *      [mongo.slave]
+     *      mongo://192.168.1.2/test
+     *      mongo://192.168.1.3/test
+     *      mongo://192.168.1.4/test
+     *
+     * @param $file
+     * @return array|bool 返回解析后的config, 并记录在 `DB::$allConfig` 变量中
+     */
+    public static function loadConfig($file)
+    {
+        if (!is_file($file))return false;
+
+        $contents = explode("\n", trim(file_get_contents($file)));
+
+        $config        = [];
+        $configCluster = [];
+        $configName    = null;
+        $clusterName   = null;
+        $isCluster     = false;
+
+        foreach ($contents as $item)
+        {
+            $item = trim($item);
+
+            if ('' === $item || in_array(substr($item, 0, 1), [';', '#']))
+            {
+                # 注释
+                continue;
+            }
+
+            if (preg_match('#^\[([a-z0-9_\.]+)\]$#i', $item, $m))
+            {
+                if (false !== strpos($m[1], '.'))
+                {
+                    $isCluster  = true;
+                    list($configName, $clusterName) = explode('.', $m[1]);
+                }
+                else
+                {
+                    $isCluster  = false;
+                    $configName = $m[1];
+                }
+            }
+            elseif (null === $configName)
+            {
+                continue;
+            }
+            else
+            {
+                if (false !== strpos($item, '://'))
+                {
+                    $dbConfig = static::parseDsn($item);
+                }
+                elseif (isset($config[$configName]))
+                {
+                    # 字符串
+                    $masterConfig = $config[$configName]['connection'];
+
+                    $dbConfig = [
+                        'username'   => $masterConfig['username'],
+                        'password'   => $masterConfig['password'],
+                        'hostname'   => $item,
+                        'port'       => $masterConfig['port'],
+                        'persistent' => $masterConfig['persistent'],
+                        'database'   => $masterConfig['database'],
+                        'weight'     => 10,
+                    ];
+                }
+                else
+                {
+                    continue;
+                }
+
+                if ($dbConfig)
+                {
+                    if ($isCluster)
+                    {
+                        if (!isset($dbConfig['weight']))
+                        {
+                            $dbConfig['weight'] = 10;
+                        }
+
+                        unset($dbConfig['type']);
+                        $configCluster[$configName][$clusterName][] = $dbConfig;
+                    }
+                    else
+                    {
+                        if (isset($dbConfig['extra']))
+                        {
+                            $config[$configName] = $dbConfig['extra'];
+                            unset($dbConfig['extra']);
+                        }
+
+                        $config[$configName]['type'] = $dbConfig['type'];
+
+                        unset($dbConfig['type']);
+
+                        $config[$configName]['connection'] = $dbConfig;
+                    }
+
+                }
+            }
+        }
+
+        if ($configCluster)foreach ($configCluster as $key => $item)
+        {
+            $config[$key]['cluster'] = $item;
+        }
+
+        static::$allConfig = $config;
+
+        return $config;
+    }
+
+    /**
      * 解析DSN路径格式
      *
      * @param  string $dsn DSN string
@@ -845,6 +943,22 @@ class DB extends QueryBuilder
             {
                 // Strip leading slash
                 $db['database'] = trim(trim(substr($connection['path'], 1), '/'));
+            }
+
+            if (isset($connection['query']))
+            {
+                parse_str($connection['query'], $extra);
+
+                if (isset($extra['weight']))
+                {
+                    $db['weight'] = $extra['weight'];
+                    unset($extra['weight']);
+                }
+
+                if ($extra)
+                {
+                    $db['extra'] = $extra;
+                }
             }
         }
 

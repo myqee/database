@@ -134,7 +134,7 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
      */
     public function __destruct()
     {
-        $this->releaseResource();
+        $this->free();
     }
 
     /**
@@ -142,7 +142,12 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
      *
      * @return mixed
      */
-    abstract protected function releaseResource();
+    abstract public function free();
+
+    /**
+     * 返回当前行数据
+     */
+    abstract public function fetchAssoc();
 
     /**
      * 统计当前查询返回数据
@@ -150,11 +155,6 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
      * @return int
      */
     abstract protected function totalCount();
-
-    /**
-     * 返回当前行数据
-     */
-    abstract protected function fetchAssoc();
 
     /**
      * 返回当前返回对象
@@ -221,7 +221,7 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
             if ($this->count() === count($this->data))
             {
                 # 释放资源
-                $this->releaseResource();
+                $this->free();
             }
         }
 
@@ -352,7 +352,7 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
      */
     public function count()
     {
-        if (null===$this->totalRows)
+        if (null === $this->totalRows)
         {
             $this->totalRows = $this->totalCount();
         }

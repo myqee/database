@@ -10,9 +10,8 @@ namespace MyQEE\Database;
  */
 class Expression
 {
-
     // Raw expression string
-    protected $_value;
+    protected $value;
 
     /**
      * Sets the expression string.
@@ -24,7 +23,7 @@ class Expression
     public function __construct($value)
     {
         // Set the expression string
-        $this->_value = $value;
+        $this->value = $value;
     }
 
     /**
@@ -36,7 +35,7 @@ class Expression
      */
     public function value()
     {
-        return $this->_value;
+        return $this->value;
     }
 
     /**

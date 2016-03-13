@@ -9,23 +9,23 @@ namespace MyQEE\Database;
  * @copyright  Copyright (c) 2008-2016 myqee.com
  * @license    http://www.myqee.com/license.html
  */
-class QueryBuilder
+abstract class QueryBuilder
 {
     /**
      * Builder数组
      *
      * @var array
      */
-    protected $_builder = array();
+    protected $builder = [];
 
     /**
      * Builder备份
      *
      * @var array
      */
-    protected $_builderBak = array();
+    protected $builderBak = array();
 
-    protected $_lastJoin = null;
+    protected $lastJoin = null;
 
     public function __construct()
     {
@@ -64,7 +64,7 @@ class QueryBuilder
      */
     public function prepare($statement)
     {
-        $this->_builder['statement'] = trim($statement);
+        $this->builder['statement'] = trim($statement);
 
         return $this;
     }
@@ -78,7 +78,20 @@ class QueryBuilder
      */
     public function & getBuilder()
     {
-        return $this->_builder;
+        return $this->builder;
+    }
+
+    /**
+     * 获取并重置设置
+     *
+     * @return array
+     */
+    public function getAndResetBuilder()
+    {
+        $builder = $this->builder;
+        $this->reset();
+
+        return $builder;
     }
 
     /**
@@ -107,7 +120,7 @@ class QueryBuilder
      */
     public function setBuilder(array $builder)
     {
-        $this->_builder = array_merge($this->_builder, $builder);
+        $this->builder = array_merge($this->builder, $builder);
 
         return $this;
     }
@@ -121,7 +134,7 @@ class QueryBuilder
      */
     public function distinct($value = true)
     {
-        $this->_builder['distinct'] = $value;
+        $this->builder['distinct'] = $value;
 
         return $this;
     }
@@ -161,7 +174,7 @@ class QueryBuilder
             $columns = array($columns);
         }
 
-        $this->_builder['select'] = array_merge($this->_builder['select'], $columns);
+        $this->builder['select'] = array_merge($this->builder['select'], $columns);
 
         return $this;
     }
@@ -174,7 +187,7 @@ class QueryBuilder
      */
     public function select_array(array $columns)
     {
-        $this->_builder['select'] = array_merge($this->_builder['select'], $columns);
+        $this->builder['select'] = array_merge($this->builder['select'], $columns);
 
         return $this;
     }
@@ -255,7 +268,7 @@ class QueryBuilder
      */
     public function selectAdv($column, $type, $opt1 = null, $opt2 = null)
     {
-        $this->_builder['select_adv'][] = func_get_args();
+        $this->builder['select_adv'][] = func_get_args();
 
         return $this;
     }
@@ -268,7 +281,7 @@ class QueryBuilder
      */
     public function columns(array $columns)
     {
-        $this->_builder['columns'] = $columns;
+        $this->builder['columns'] = $columns;
 
         return $this;
     }
@@ -305,7 +318,7 @@ class QueryBuilder
             $values = func_get_args();
         }
 
-        $this->_builder['values'] = array_merge($this->_builder['values'], $values);
+        $this->builder['values'] = array_merge($this->builder['values'], $values);
 
         return $this;
     }
@@ -331,7 +344,7 @@ class QueryBuilder
             {
                 $op = '=';
             }
-            $this->_builder['set'][] = [$column, $value, $op];
+            $this->builder['set'][] = [$column, $value, $op];
         }
 
         return $this;
@@ -347,7 +360,7 @@ class QueryBuilder
      */
     public function value($column, $value, $op = '=')
     {
-        $this->_builder['set'][] = [$column, $value, $op];
+        $this->builder['set'][] = [$column, $value, $op];
 
         return $this;
     }
@@ -384,7 +397,7 @@ class QueryBuilder
      */
     public function table($table)
     {
-        $this->_builder['table'] = $table;
+        $this->builder['table'] = $table;
 
         return $this;
     }
@@ -417,7 +430,7 @@ class QueryBuilder
             $tables = array($tables);
         }
 
-        $this->_builder['from'] = array_merge($this->_builder['from'], $tables);
+        $this->builder['from'] = array_merge($this->builder['from'], $tables);
 
         return $this;
     }
@@ -431,15 +444,15 @@ class QueryBuilder
      */
     public function join($table, $type = null)
     {
-        $this->_builder['join'][] = [
+        $this->builder['join'][] = [
             'table' => $table,
             'type'  => $type,
             'on'    => [],
         ];
-        end($this->_builder['join']);
-        $k = key($this->_builder['join']);
-        unset($this->_lastJoin);
-        $this->_lastJoin = &$this->_builder['join'][$k];
+        end($this->builder['join']);
+        $k = key($this->builder['join']);
+        unset($this->lastJoin);
+        $this->lastJoin = &$this->builder['join'][$k];
 
         return $this;
     }
@@ -454,7 +467,7 @@ class QueryBuilder
      */
     public function on($c1, $c2, $op = '=')
     {
-        $this->_lastJoin['on'][] = [$c1, $op, $c2];
+        $this->lastJoin['on'][] = [$c1, $op, $c2];
 
         return $this;
     }
@@ -470,7 +483,7 @@ class QueryBuilder
     {
         $columns = func_get_args();
 
-        $this->_builder['group_by'] = array_merge($this->_builder['group_by'], $columns);
+        $this->builder['group_by'] = array_merge($this->builder['group_by'], $columns);
 
         return $this;
     }
@@ -486,7 +499,7 @@ class QueryBuilder
      */
     public function groupConcat($column, $order_by = null, $separator = null, $distinct = false)
     {
-        $this->_builder['group_concat'][] = func_get_args();
+        $this->builder['group_concat'][] = func_get_args();
 
         return $this;
     }
@@ -523,7 +536,7 @@ class QueryBuilder
      */
     public function andHaving($column, $value = null, $op = '=')
     {
-        $this->_builder['having'][] = ['AND' => [$column, $op, $value]];
+        $this->builder['having'][] = ['AND' => [$column, $op, $value]];
 
         return $this;
     }
@@ -538,7 +551,7 @@ class QueryBuilder
      */
     public function orHaving($column, $value = null, $op = '=')
     {
-        $this->_builder['having'][] = ['OR' => [$column, $op, $value]];
+        $this->builder['having'][] = ['OR' => [$column, $op, $value]];
 
         return $this;
     }
@@ -560,7 +573,7 @@ class QueryBuilder
      */
     public function andHavingOpen()
     {
-        $this->_builder['having'][] = ['AND' => '('];
+        $this->builder['having'][] = ['AND' => '('];
 
         return $this;
     }
@@ -572,7 +585,7 @@ class QueryBuilder
      */
     public function orHavingOpen()
     {
-        $this->_builder['having'][] = ['OR' => '('];
+        $this->builder['having'][] = ['OR' => '('];
 
         return $this;
     }
@@ -594,7 +607,7 @@ class QueryBuilder
      */
     public function andHavingClose()
     {
-        $this->_builder['having'][] = ['AND' => ')'];
+        $this->builder['having'][] = ['AND' => ')'];
 
         return $this;
     }
@@ -606,7 +619,7 @@ class QueryBuilder
      */
     public function orHavingClose()
     {
-        $this->_builder['having'][] = ['OR' => ')'];
+        $this->builder['having'][] = ['OR' => ')'];
 
         return $this;
     }
@@ -622,7 +635,7 @@ class QueryBuilder
         $number = (int)$number;
         if ($number > 0)
         {
-            $this->_builder['offset'] = $number;
+            $this->builder['offset'] = $number;
         }
 
         return $this;
@@ -644,22 +657,22 @@ class QueryBuilder
                 switch ($key)
                 {
                     case 'distinct':
-                        $this->_builder['distinct'] = false;
+                        $this->builder['distinct'] = false;
                         break;
                     case 'limit':
                     case 'offset':
                     case 'table':
-                        $this->_builder[$key] = null;
+                        $this->builder[$key] = null;
                         break;
                     case 'last_join':
                     case 'join':
                     case 'on':
-                        $this->_builder['last_join'] = null;
+                        $this->builder['last_join'] = null;
                         break;
                     default:
-                        if (isset($this->_builder[$key]))
+                        if (isset($this->builder[$key]))
                         {
-                            $this->_builder[$key] = [];
+                            $this->builder[$key] = [];
                         }
                         break;
                 }
@@ -667,30 +680,30 @@ class QueryBuilder
         }
         else
         {
-            $this->_builderBak = $this->_builder;
+            $this->builderBak = $this->builder;
 
-            $this->_builder['select']
-                = $this->_builder['select_adv']
-                = $this->_builder['from']
-                = $this->_builder['join']
-                = $this->_builder['where']
-                = $this->_builder['group_by']
-                = $this->_builder['having']
-                = $this->_builder['set']
-                = $this->_builder['columns']
-                = $this->_builder['values']
-                = $this->_builder['where']
-                = $this->_builder['index']
-                = $this->_builder['group_concat']
-                = $this->_builder['statement']
-                = $this->_builder['order_by'] = [];
+            $this->builder['select']
+                = $this->builder['select_adv']
+                = $this->builder['from']
+                = $this->builder['join']
+                = $this->builder['where']
+                = $this->builder['group_by']
+                = $this->builder['having']
+                = $this->builder['set']
+                = $this->builder['columns']
+                = $this->builder['values']
+                = $this->builder['where']
+                = $this->builder['index']
+                = $this->builder['group_concat']
+                = $this->builder['statement']
+                = $this->builder['order_by'] = [];
 
-            $this->_builder['distinct'] = false;
+            $this->builder['distinct'] = false;
 
-            $this->_builder['limit']
-                = $this->_builder['offset']
-                = $this->_builder['table']
-                = $this->_builder['last_join'] = null;
+            $this->builder['limit']
+                = $this->builder['offset']
+                = $this->builder['table']
+                = $this->builder['last_join'] = null;
         }
 
         return $this;
@@ -752,7 +765,7 @@ class QueryBuilder
                 $op     = $m[2];
             }
         }
-        $this->_builder['where'][] = ['AND' => [$column, $op, $value]];
+        $this->builder['where'][] = ['AND' => [$column, $op, $value]];
 
         return $this;
     }
@@ -767,7 +780,7 @@ class QueryBuilder
      */
     public function orWhere($column, $value, $op = '=')
     {
-        $this->_builder['where'][] = ['OR' => [$column, $op, $value]];
+        $this->builder['where'][] = ['OR' => [$column, $op, $value]];
 
         return $this;
     }
@@ -789,7 +802,7 @@ class QueryBuilder
      */
     public function andWhereOpen()
     {
-        $this->_builder['where'][] = ['AND' => '('];
+        $this->builder['where'][] = ['AND' => '('];
 
         return $this;
     }
@@ -801,7 +814,7 @@ class QueryBuilder
      */
     public function orWhereOpen()
     {
-        $this->_builder['where'][] = ['OR' => '('];
+        $this->builder['where'][] = ['OR' => '('];
 
         return $this;
     }
@@ -823,7 +836,7 @@ class QueryBuilder
      */
     public function andWhereClose()
     {
-        $this->_builder['where'][] = ['AND' => ')'];
+        $this->builder['where'][] = ['AND' => ')'];
 
         return $this;
     }
@@ -835,7 +848,7 @@ class QueryBuilder
      */
     public function orWhereClose()
     {
-        $this->_builder['where'][] = ['OR' => ')'];
+        $this->builder['where'][] = ['OR' => ')'];
 
         return $this;
     }
@@ -849,7 +862,7 @@ class QueryBuilder
      */
     public function orderBy($column, $direction = 'ASC')
     {
-        $this->_builder['order_by'][] = array($column, strtoupper($direction));
+        $this->builder['order_by'][] = array($column, strtoupper($direction));
 
         return $this;
     }
@@ -863,7 +876,7 @@ class QueryBuilder
      */
     public function limit($number, $offset = null)
     {
-        $this->_builder['limit'] = (int)$number;
+        $this->builder['limit'] = (int)$number;
 
         if (null !== $offset)
         {
@@ -931,7 +944,7 @@ class QueryBuilder
      */
     public function useIndex($index)
     {
-        $this->_builder['index'][] = array($index, 'use');
+        $this->builder['index'][] = array($index, 'use');
 
         return $this;
     }
@@ -944,7 +957,7 @@ class QueryBuilder
      */
     public function forceIndex($index)
     {
-        $this->_builder['index'][] = array($index, 'force');
+        $this->builder['index'][] = array($index, 'force');
 
         return $this;
     }
@@ -957,7 +970,7 @@ class QueryBuilder
      */
     public function ignoreIndex($index)
     {
-        $this->_builder['index'][] = array($index, 'ignore');
+        $this->builder['index'][] = array($index, 'ignore');
 
         return $this;
     }
@@ -995,9 +1008,9 @@ class QueryBuilder
      */
     public function recoveryLastBuilder()
     {
-        if ($this->_builderBak)
+        if ($this->builderBak)
         {
-            $this->_builder = $this->_builderBak;
+            $this->builder = $this->builderBak;
         }
 
         return $this;
