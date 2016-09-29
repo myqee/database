@@ -4,8 +4,7 @@ namespace MyQEE\Database;
 use \Exception;
 
 # 是否有 MyQEE 基础类库
-
-define('HAVE_MYQEE_CORE', class_exists('\MyQEE\Service', false));
+define('INCLUDE_MYQEE_CORE', class_exists('\MyQEE', false));
 
 
 /**
@@ -100,7 +99,7 @@ class DB extends QueryBuilder
         {
             static::$instances[$name] = new DB($configName);
 
-            if (HAVE_MYQEE_CORE)
+            if (INCLUDE_MYQEE_CORE)
             {
                 # 注册服务
                 if ($configName === static::DEFAULT_CONFIG_NAME)
@@ -155,7 +154,7 @@ class DB extends QueryBuilder
         {
             $this->config = static::$allConfig[$configName];
         }
-        elseif (HAVE_MYQEE_CORE)
+        elseif (INCLUDE_MYQEE_CORE)
         {
             $this->config = \MyQEE\config('database.' . $configName);
         }
@@ -254,7 +253,7 @@ class DB extends QueryBuilder
         # 当前驱动
         $this->driver = new $driver($this->config);
 
-        if (HAVE_MYQEE_CORE)
+        if (INCLUDE_MYQEE_CORE)
         {
             # 增加自动关闭连接列队
         }
@@ -1032,7 +1031,7 @@ class DB extends QueryBuilder
 
         if (null === $slowQueryMTime)
         {
-            if (!HAVE_MYQEE_CORE)
+            if (!INCLUDE_MYQEE_CORE)
             {
                 if (PHP_SAPI === 'cli')
                 {

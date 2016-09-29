@@ -1,7 +1,7 @@
 # 迈启数据库类库
 
 
-DB 类除了拥有自己独有的方法外，还继承了 andQueryBuilder 类。
+DB 类除了拥有自己独有的方法外，还继承了 QueryBuilder 类。
 
 
 ## DB::instance($configName = 'default')

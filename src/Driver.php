@@ -231,7 +231,7 @@ abstract class Driver
      */
     public function execute($statement, array $inputParameters, $asObject = null, $connectionType = null)
     {
-        $numParameters = array();
+        $numParameters = [];
         foreach($inputParameters as $key => $value)
         {
             if (is_int($key))
@@ -389,7 +389,7 @@ abstract class Driver
 
         if ($lastError)
         {
-            if (HAVE_MYQEE_CORE && IS_DEBUG && $lastError instanceof Exception)
+            if (INCLUDE_MYQEE_CORE && IS_DEBUG && $lastError instanceof Exception)
             {
                 throw $lastError;
             }
