@@ -99,18 +99,19 @@ class DB extends QueryBuilder
         {
             static::$instances[$name] = new DB($configName);
 
-            if (INCLUDE_MYQEE_CORE)
-            {
-                # 注册服务
-                if ($configName === static::DEFAULT_CONFIG_NAME)
-                {
-                    \MyQEE\Service::register('$db', static::$instances[$name], false);
-                }
-                elseif (is_string($configName))
-                {
-                    \MyQEE\Service::register('$db.' . $configName, static::$instances[$name], false);
-                }
-            }
+            // TODO 注册服务器
+            //if (INCLUDE_MYQEE_CORE)
+            //{
+            //    # 注册服务
+            //    if ($configName === static::DEFAULT_CONFIG_NAME)
+            //    {
+            //        \MyQEE\Service::register('$db', static::$instances[$name], false);
+            //    }
+            //    elseif (is_string($configName))
+            //    {
+            //        \MyQEE\Service::register('$db.' . $configName, static::$instances[$name], false);
+            //    }
+            //}
         }
 
         return static::$instances[$name];

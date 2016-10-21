@@ -125,6 +125,13 @@ abstract class Driver
     protected $currentConnection = null;
 
     /**
+     * 当前连接配置
+     *
+     * @var array
+     */
+    protected $currentConnectionConfig = [];
+
+    /**
      * 集群类型
      *
      * @var string
@@ -297,25 +304,28 @@ abstract class Driver
             check:
             if ($this->checkConnect($id))
             {
-                $this->connectionId = $id;
-                $this->cluster      = $clusterName;
+                $this->connectionId            = $id;
+                $this->cluster                 = $clusterName;
+                $this->currentConnectionConfig = $this->connections[$this->connectionId];
 
                 return $this->connections[$id]['resource'];
             }
             else
             {
-                $this->connectionId      = $this->connect($clusterName);
-                $this->currentConnection = $this->connections[$this->connectionId]['resource'];
-                $this->cluster           = $clusterName;
+                $this->connectionId            = $this->connect($clusterName);
+                $this->currentConnection       = $this->connections[$this->connectionId]['resource'];
+                $this->cluster                 = $clusterName;
+                $this->currentConnectionConfig = $this->connections[$this->connectionId];
 
                 return $this->currentConnection;
             }
         }
         else
         {
-            $this->connectionId      = $this->connect($clusterName);
-            $this->currentConnection = $this->connections[$this->connectionId]['resource'];
-            $this->cluster           = $clusterName;
+            $this->connectionId            = $this->connect($clusterName);
+            $this->currentConnection       = $this->connections[$this->connectionId]['resource'];
+            $this->cluster                 = $clusterName;
+            $this->currentConnectionConfig = $this->connections[$this->connectionId];
 
             return $this->currentConnection;
         }
@@ -409,7 +419,7 @@ abstract class Driver
         return $id;
     }
 
-    abstract protected function doConnect(array $config);
+    abstract protected function doConnect(array & $config);
 
     /**
      * 构建SQL语句
