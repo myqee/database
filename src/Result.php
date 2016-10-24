@@ -278,14 +278,14 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
             {
                 foreach ($this as $row)
                 {
-                    $rs[$row->$key] = $row;
+                    $rs[(string)$row->$key] = $row;
                 }
             }
             else
             {
                 foreach ($this as $row)
                 {
-                    $rs[$row[$key]] = $row;
+                    $rs[(string)$row[$key]] = $row;
                 }
             }
         }
@@ -295,14 +295,14 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
             {
                 foreach ($this as $row)
                 {
-                    $rs[$row->$key] = $row->$value;
+                    $rs[(string)$row->$key] = $row->$value;
                 }
             }
             else
             {
                 foreach ($this as $row)
                 {
-                    $rs[$row[$key]] = $row[$value];
+                    $rs[(string)$row[$key]] = $row[$value];
                 }
             }
         }
