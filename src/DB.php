@@ -1,10 +1,8 @@
 <?php
 namespace MyQEE\Database;
 
-use \Exception;
-
 # 是否有 MyQEE 基础类库
-define('INCLUDE_MYQEE_CORE', class_exists('\MyQEE', false));
+define('INCLUDE_MYQEE_CORE', class_exists('\\MyQEE', false));
 
 
 /**
@@ -12,7 +10,7 @@ define('INCLUDE_MYQEE_CORE', class_exists('\MyQEE', false));
  *
  * @author     呼吸二氧化碳 <jonwang@myqee.com>
  * @category   Database
- * @copyright  Copyright (c) 2008-2016 myqee.com
+ * @copyright  Copyright (c) 2008-2018 myqee.com
  * @license    http://www.myqee.com/license.html
  */
 class DB extends QueryBuilder
@@ -27,7 +25,7 @@ class DB extends QueryBuilder
     /**
      * @var array Database instances
      */
-    protected static $instances = array();
+    protected static $instances = [];
 
     /**
      * 当前配置
@@ -46,11 +44,10 @@ class DB extends QueryBuilder
     /**
      * 记录慢查询
      *
-     *     array
-     *     (
-     *         //    执行时的时间    耗时(单位毫秒)   查询语句
-     *         array(1351691389,   1200          ,'select * from test;'),
-     *     )
+     *     [
+     *         # 执行时的时间   耗时(单位毫秒)   查询语句
+     *         [1351691389,   1200          ,'select * from test;']
+     *     ]
      *
      * @var array
      */
@@ -74,10 +71,10 @@ class DB extends QueryBuilder
     /**
      * 返回数据库实例化对象
      *
-     * 支持 `DB::instance('mysqli://root:123456@127.0.0.1/myqee/');` 的方式
+     * 支持 `$db = DB::instance('mysqli://root:123456@127.0.0.1/myqee/');` 的方式
      *
      * @param string $configName 默认值为 Database::DEFAULT_CONFIG_NAME
-     * @return DB
+     * @return static
      */
     public static function instance($configName = null)
     {
@@ -99,19 +96,18 @@ class DB extends QueryBuilder
         {
             static::$instances[$name] = new DB($configName);
 
-            // TODO 注册服务器
-            //if (INCLUDE_MYQEE_CORE)
-            //{
-            //    # 注册服务
-            //    if ($configName === static::DEFAULT_CONFIG_NAME)
-            //    {
-            //        \MyQEE\Service::register('$db', static::$instances[$name], false);
-            //    }
-            //    elseif (is_string($configName))
-            //    {
-            //        \MyQEE\Service::register('$db.' . $configName, static::$instances[$name], false);
-            //    }
-            //}
+            if (INCLUDE_MYQEE_CORE)
+            {
+                # 注册服务
+                if ($configName === static::DEFAULT_CONFIG_NAME)
+                {
+                    \MyQEE\Service::register('$db', static::$instances[$name], false);
+                }
+                elseif (is_string($configName))
+                {
+                    \MyQEE\Service::register('$db.' . $configName, static::$instances[$name], false);
+                }
+            }
         }
 
         return static::$instances[$name];
@@ -143,12 +139,12 @@ class DB extends QueryBuilder
             list($type) = explode('://', $configName);
 
             $this->config = [
-                'type'         => $type,
-                'connection'   => $configName,
-                'table_prefix' => '',
-                'charset'      => 'utf8',
-                'caching'      => false,
-                'profiling'    => false,
+                'type'       => $type,
+                'connection' => $configName,
+                'prefix'     => '',
+                'charset'    => 'UTF8',
+                'caching'    => false,
+                'profiling'  => false,
             ];
         }
         elseif (static::$allConfig && isset(static::$allConfig[$configName]))
@@ -161,32 +157,34 @@ class DB extends QueryBuilder
         }
         else
         {
-            throw new Exception('can not found database config');
+            throw new Exception('Can not found database config');
         }
 
         $this->config['charset'] = strtoupper($this->config['charset']);
 
-        if (!isset($this->config['auto_change_charset']))
+        # 自动转换数据库编码到UTF8
+        if (!isset($this->config['autoConvertToUtf8']))
         {
-            $this->config['auto_change_charset'] = false;
+            $this->config['autoConvertToUtf8'] = false;
         }
 
-        if ($this->config['auto_change_charset'])
+        if ($this->config['autoConvertToUtf8'])
         {
-            if (isset($this->config['data_charset']))
+            # 数据库原始数据
+            if (isset($this->config['dataCharset']))
             {
-                $this->config['data_charset'] = strtoupper($this->config['data_charset']);
+                $this->config['dataCharset'] = strtoupper($this->config['dataCharset']);
             }
             else
             {
-                $this->config['data_charset'] = $this->config['charset'];
+                $this->config['dataCharset'] = $this->config['charset'];
             }
         }
 
-        if (isset($this->config['driver_class']) && $this->config['driver_class'])
+        if (isset($this->config['driverClass']) && $this->config['driverClass'])
         {
             # 自定义对象名
-            $driver = $this->config['driver_class'];
+            $driver = $this->config['driverClass'];
         }
         else
         {
@@ -246,8 +244,10 @@ class DB extends QueryBuilder
             unset($this->config['connection']['type']);
             if (isset($this->config['connection']['extra']))
             {
-                $this->config += $this->config['connection']['extra'];
+                $extra = $this->config['connection']['extra'];
                 unset($this->config['connection']['extra']);
+                unset($extra['connection']);
+                $this->config = array_merge($this->config, $extra);
             }
         }
 
@@ -361,7 +361,7 @@ class DB extends QueryBuilder
      * @param string|DB|QueryBuilder $sql
      * @param boolean $asObject 返回对象名称 默认false，即返回数组
      * @param string $clusterName 使用集群, true 则使用主数据库, 例如 slave, master 等, 确保数据库相关配置中包括对应集群
-     * @return Result
+     * @return Result|int|array
      */
     public function query($sql, $asObject = false, $clusterName = null)
     {
@@ -387,9 +387,9 @@ class DB extends QueryBuilder
      *
      * @return  string
      */
-    public function tablePrefix()
+    public function prefix()
     {
-        return $this->config['table_prefix'];
+        return $this->config['prefix'];
     }
 
     /**
@@ -416,7 +416,7 @@ class DB extends QueryBuilder
      */
     public function get($asObject = false, $clusterName = null)
     {
-        return $this->query($this, $asObject, $clusterName);
+        return $this->query($this->compile(), $asObject, $clusterName);
     }
 
     /**
@@ -428,7 +428,7 @@ class DB extends QueryBuilder
      */
     public function getSingle($asObject = false, $clusterName = null)
     {
-        return $this->get($asObject, $clusterName)->current();
+        return $this->limit(1)->get($asObject, $clusterName)->current();
     }
 
     /**
@@ -477,7 +477,7 @@ class DB extends QueryBuilder
      * @param string $table
      * @param array $value
      * @param Result
-     * @return array(插入ID,作用行数)
+     * @return array  array(插入ID, 作用行数)
      */
     public function insert($table = null, $value = null)
     {
@@ -551,15 +551,9 @@ class DB extends QueryBuilder
             $this->where($where);
         }
 
-        // 记录当前builder信息
-        $builder = $this->builder;
+        $this->select($this->exprValue('COUNT(1) AS `totalRowCount`'));
 
-        $this->select($this->exprValue('COUNT(1) AS `total_row_count`'));
-
-        $count = (int)$this->query($this->compile('select'), false)->get('total_row_count');
-
-        // 将之前获取的builder信息放倒_builder_bak上，以便可使用->recovery_last_builder()方法恢复前一个builder
-        $this->builderBak = $builder;
+        $count = (int)$this->query($this->compile('select'), false)->get('totalRowCount');
 
         return $count;
     }
@@ -697,7 +691,7 @@ class DB extends QueryBuilder
      */
     public function isSupportObjectValue()
     {
-        $this->driver->isSupportObjectValue();
+        return $this->driver->isSupportObjectValue();
     }
 
     /**
@@ -999,7 +993,7 @@ class DB extends QueryBuilder
             return true;
         }
 
-        $queries = array();
+        $queries = [];
         foreach (static::$slowQueries as $item)
         {
             $queries[] = [
@@ -1010,20 +1004,40 @@ class DB extends QueryBuilder
             ];
         }
 
-        $site = \MyQEE\Site::instance();
-
         $data = [
-            'url'       => $_SERVER["SCRIPT_URI"] . ('' !== $_SERVER["QUERY_STRING"] ? '?' . $_SERVER["QUERY_STRING"] : ''),
-            'method'    => $site->request->method,
-            'time'      => $site->request->time,
-            'ip'        => $site->request->ip,
-            'page_time' => microtime(1) - $site->request->timeFloat,
-            'post'      => $site->request->post(),
-            'queries'   => $queries,
+            'url'      => $_SERVER["SCRIPT_URI"] . ('' !== $_SERVER["QUERY_STRING"] ? '?' . $_SERVER["QUERY_STRING"] : ''),
+            'method'   => isset($_SERVER['REQUEST_METHOD']) ? $_SERVER['REQUEST_METHOD'] : 'null',
+            'time'     => $_SERVER['REQUEST_TIME'],
+            'ip'       => self::getIp(),
+            'pageTime' => microtime(1) - $_SERVER['REQUEST_TIME_FLOAT'],
+            'post'     => $_POST,
+            'get'      => $_GET,
+            'cookie'   => $_COOKIE,
+            'queries'  => $queries,
         ];
 
         // 写入LOG
-        return \MyQEE\log('database.slow_query', $data, LOG_INFO);
+        return self::log('database.slowQuery', $data, LOG_INFO);
+    }
+
+    /**
+     * 写入Log
+     *
+     * @param       $tag
+     * @param array $data
+     * @param int   $type
+     * @return bool
+     */
+    protected static function log($tag, array $data, $type = LOG_INFO)
+    {
+        if (true === INCLUDE_MYQEE_CORE)
+        {
+            return \MyQEE\log('database.slowQuery', $data, LOG_INFO);
+        }
+        else
+        {
+            return syslog($type, "[$tag] ". json_encode($data, JSON_UNESCAPED_UNICODE));
+        }
     }
 
     protected static function getSlowQuerySettingTime()
@@ -1049,10 +1063,38 @@ class DB extends QueryBuilder
             }
             else
             {
-                $slowQueryMTime = (int)\MyQEE\config('core.slow_query_mtime');
+                $slowQueryMTime = (int)\MyQEE\config('core.slowQueryMtime');
             }
         }
 
         return $slowQueryMTime;
+    }
+
+    /**
+     * 获取IP
+     *
+     * @return string
+     */
+    protected static function getIp()
+    {
+        $ip = [];
+
+        if (isset($_SERVER['HTTP_X_FORWARDED_FOR']) && $_SERVER['HTTP_X_FORWARDED_FOR'])
+        {
+            $ip = explode(',', str_replace(' ', '', $_SERVER['HTTP_X_FORWARDED_FOR']));
+        }
+
+        if (isset($_SERVER['HTTP_CLIENT_IP']) && $_SERVER['HTTP_CLIENT_IP'])
+        {
+            $ip = array_merge($ip, explode(',', str_replace(' ', '', $_SERVER['HTTP_CLIENT_IP'])));
+        }
+
+        if (isset($_SERVER['REMOTE_ADDR']) && $_SERVER['REMOTE_ADDR'])
+        {
+            $ip = array_merge($ip, explode(',', str_replace(' ', '', $_SERVER['REMOTE_ADDR'])));
+        }
+
+        if (!$ip)return 'unknown';
+        return current($ip);
     }
 }

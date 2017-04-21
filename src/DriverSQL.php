@@ -6,7 +6,7 @@ namespace MyQEE\Database;
  *
  * @author     呼吸二氧化碳 <jonwang@myqee.com>
  * @category   Database
- * @copyright  Copyright (c) 2008-2016 myqee.com
+ * @copyright  Copyright (c) 2008-2018 myqee.com
  * @license    http://www.myqee.com/license.html
  */
 abstract class DriverSQL extends Driver
@@ -21,7 +21,9 @@ abstract class DriverSQL extends Driver
     /**
      * 返回查询类型
      *
-     *     list($sqlType, $needMaster)  = $this->getQueryType($sql);
+     * ```php
+     * list($sqlType, $needMaster)  = $this->getQueryType($sql);
+     * ```
      *
      * @param $sql
      * @return array 第1个是$sqlType, 第2个是 是否需要使用主数据库
@@ -108,7 +110,7 @@ abstract class DriverSQL extends Driver
     /**
      * Quote a database table name and adds the table prefix if needed.
      *
-     * $table = $db->quote_table($table);
+     * $table = $db->quoteTable($table);
      *
      * @param   mixed  $value table name or array(table, alias)
      * @param   bool  $autoAsTable
@@ -118,7 +120,6 @@ abstract class DriverSQL extends Driver
      */
     public function quoteTable($value, $autoAsTable = false)
     {
-        // Assign the table by reference from the value
         if (is_array($value))
         {
             $table = & $value[0];
@@ -128,15 +129,15 @@ abstract class DriverSQL extends Driver
             $table = & $value;
         }
 
-        if ($this->config['table_prefix'] && is_string($table) && strpos($table, '.') === false)
+        if ($this->config['prefix'] && is_string($table) && strpos($table, '.') === false)
         {
             if (stripos($table, ' AS ') !== false)
             {
-                $table = $this->config['table_prefix'] . $table;
+                $table = $this->config['prefix'] . $table;
             }
             else
             {
-                $table = $this->config['table_prefix'] . $table . ($autoAsTable ? ' AS ' . $table : '');
+                $table = $this->config['prefix'] . $table . ($autoAsTable ? ' AS ' . $table : '');
             }
         }
 
@@ -156,15 +157,15 @@ abstract class DriverSQL extends Driver
      */
     public function quote($value)
     {
-        if ($value === null)
+        if (null === $value)
         {
             return 'NULL';
         }
-        elseif ($value === true)
+        elseif (true === $value)
         {
             return "'1'";
         }
-        elseif ($value === false)
+        elseif (false === $value)
         {
             return "'0'";
         }
@@ -172,12 +173,12 @@ abstract class DriverSQL extends Driver
         {
             if ($value instanceof DB)
             {
-                // Create a sub-query
+                # 创建一个子查询SQL
                 return '('. $value->compile() .')';
             }
             elseif ($value instanceof Expression)
             {
-                // Use a raw expression
+                # 使用一个不被解析的数据
                 return $value->value();
             }
             elseif ($value instanceof \ArrayObject || $value instanceof \ArrayIterator || $value instanceof \stdClass)
@@ -186,7 +187,7 @@ abstract class DriverSQL extends Driver
             }
             else
             {
-                // Convert the object to a string
+                # 转换成字符串
                 return $this->quote((string)$value);
             }
         }
@@ -209,6 +210,10 @@ abstract class DriverSQL extends Driver
 
     /**
      * 构建SQL语句
+     *
+     * @param array $builder
+     * @param string $type 支持 select (默认), insert, replace, insertUpdate, update, delete
+     * @return string
      */
     public function compile($builder, $type = 'select')
     {
@@ -220,7 +225,7 @@ abstract class DriverSQL extends Driver
             case'replace':
                 return $this->compileInsert($builder, 'REPLACE');
 
-            case'insert_update':
+            case'insertUpdate':
                 return $this->compileInsert($builder, 'REPLACE', true);
 
             case 'update':
@@ -283,7 +288,7 @@ abstract class DriverSQL extends Driver
             {
                 $parts = explode('.', $column);
 
-                $prefix = $this->config['table_prefix'];
+                $prefix = $this->config['prefix'];
                 if ($prefix)
                 {
                     // Get the offset of the table name, 2nd-to-last part
@@ -339,7 +344,7 @@ abstract class DriverSQL extends Driver
             }
             else
             {
-                $builder['select_adv'][] = [
+                $builder['selectAdv'][] = [
                     $builder['distinct'],
                     'distinct',
                 ];
@@ -385,43 +390,22 @@ abstract class DriverSQL extends Driver
             $query .= ' WHERE '. $this->compileConditions($builder['where']);
         }
 
-        if (!empty($builder['group_by']))
+        if (!empty($builder['groupBy']))
         {
             // Add sorting
-            $query .= ' GROUP BY '. implode(', ', array_map($quoteIdentifier, $builder['group_by']));
+            $query .= ' GROUP BY '. implode(', ', array_map($quoteIdentifier, $builder['groupBy']));
         }
 
-        if (!empty($builder['having']))
+        if (!empty($buœilder['having']))
         {
             // Add filtering conditions
             $query .= ' HAVING '. $this->compileConditions($builder['having']);
         }
 
-        if (!empty($builder['order_by']))
+        if (!empty($builder['orderBy']))
         {
             // Add sorting
-            $query .= ' '. $this->compileOrderBy($builder['order_by']);
-        }
-        elseif ($builder['where'])
-        {
-            # 如果查询中有in查询，采用自动排序方式
-            $inQuery = null;
-            foreach ($builder['where'] as $item)
-            {
-                if (isset($item['AND']) && $item['AND'][1] === 'in')
-                {
-                    if (count($item['AND'][1]) > 1)
-                    {
-                        # 大于1项才需要排序
-                        $inQuery = $item['AND'];
-                    }
-                    break;
-                }
-            }
-            if ($inQuery)
-            {
-                $query .= ' ORDER BY FIELD('. $this->quoteIdentifier($inQuery[0]) .', '. implode(', ', $this->quote($inQuery[2])) .')';
-            }
+            $query .= ' '. $this->compileOrderBy($builder['orderBy']);
         }
 
         if ($builder['limit'] !== null)
@@ -451,18 +435,18 @@ abstract class DriverSQL extends Driver
     {
         if ($this->isMySQL && $insertUpdate)
         {
-            $type_string = 'INSERT';
+            $typeString = 'INSERT';
         }
         else if ($type !== 'REPLACE')
         {
-            $type_string = 'INSERT';
+            $typeString = 'INSERT';
         }
         else
         {
-            $type_string = $type;
+            $typeString = $type;
         }
 
-        $query = $type_string . ' INTO ' . $this->quoteTable($builder['table'], false);
+        $query = $typeString . ' INTO ' . $this->quoteTable($builder['table'], false);
 
         // Add the column names
         $query .= ' (' . implode(', ', array_map([$this, 'quoteIdentifier'], $builder['columns'])) .') ';
@@ -545,10 +529,10 @@ abstract class DriverSQL extends Driver
             $query .= ' WHERE '. $this->compileConditions($builder['where']);
         }
 
-        if (!empty($builder['order_by']))
+        if (!empty($builder['orderBy']))
         {
             // Add sorting
-            $query .= ' '. $this->compileOrderBy($builder['order_by']);
+            $query .= ' '. $this->compileOrderBy($builder['orderBy']);
         }
 
         if ($builder['limit'] !== null)
@@ -596,13 +580,19 @@ abstract class DriverSQL extends Driver
         {
             list ($column, $direction) = $group;
 
-            if (!empty($direction))
+            if (is_string($direction))
             {
-                // Make the direction uppercase
-                $direction = ' '. strtoupper($direction);
+                $sort[] = $this->quoteIdentifier($column) .' '. $direction;
             }
-
-            $sort[] = $this->quoteIdentifier($column) . $direction;
+            elseif (is_array($direction))
+            {
+                foreach ($direction as &$d)
+                {
+                    $d = $this->quote($d);
+                }
+                // ORDER BY FIELD(`test`, 1, 3, 2, 8, 5);
+                $sort[] = 'FIELD('. $this->quoteIdentifier($column) .', '. implode(', ', $direction) .')';
+            }
         }
 
         return 'ORDER BY '. implode(', ', $sort);
@@ -730,7 +720,7 @@ abstract class DriverSQL extends Driver
      */
     protected function compileJoin(array $joins)
     {
-        $statements = array();
+        $statements = [];
 
         foreach ($joins as $join)
         {
@@ -816,11 +806,11 @@ abstract class DriverSQL extends Driver
 
 
     /**
-     * 初始化所有的as_table
+     * 初始化所有的 asTable
      */
     protected function initAsTable($builder)
     {
-        $this->asTable = array();
+        $this->asTable = [];
 
         if ($builder['from'])
         {
@@ -843,7 +833,7 @@ abstract class DriverSQL extends Driver
     {
         if (is_array($value))
         {
-            list ($value, $alias) = $value;
+            list ($value) = $value;
         }
         elseif (is_object($value))
         {
@@ -866,7 +856,7 @@ abstract class DriverSQL extends Driver
         {
             $alias = $m[2];
         }
-        elseif ($this->config['table_prefix'] && strpos($value, '.') === false)
+        elseif ($this->config['prefix'] && strpos($value, '.') === false)
         {
             $alias = $value;
         }
@@ -886,7 +876,7 @@ abstract class DriverSQL extends Driver
      */
     protected function formatSelectAdv(& $builder)
     {
-        if ($builder['select_adv'])foreach ($builder['select_adv'] as $item)
+        if ($builder['selectAdv'])foreach ($builder['selectAdv'] as $item)
         {
             if (!is_array($item))continue;
 
@@ -907,17 +897,17 @@ abstract class DriverSQL extends Driver
             }
 
             // 其它参数
-            $args_str = '';
+            $argsStr = '';
             if (($countItem = count($item)) > 2)
             {
                 for($i=2; $i < $countItem; $i++)
                 {
-                    $args_str .= ','. $this->quoteIdentifier($item[$i]);
+                    $argsStr .= ','. $this->quoteIdentifier($item[$i]);
                 }
             }
 
             $builder['select'][] = [
-                DB::exprValue(strtoupper($item[1]) .'('. $this->quoteIdentifier($column.$args_str) .')'),
+                DB::exprValue(strtoupper($item[1]) .'('. $this->quoteIdentifier($column.$argsStr) .')'),
                 $alias,
             ];
         }
@@ -927,11 +917,10 @@ abstract class DriverSQL extends Driver
      * 解析 GROUP_CONCAT
      *
      * @param array $arr
-     * @return string
      */
     protected function formatGroupConcat(& $builder)
     {
-        if ($builder['group_concat'])foreach($builder['group_concat'] as $item)
+        if ($builder['groupConcat'])foreach($builder['groupConcat'] as $item)
         {
             if (is_array($item[0]))
             {

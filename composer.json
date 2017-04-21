@@ -11,6 +11,9 @@
       "homepage": "http://www.queyang.com/"
     }
   ],
+  "require": {
+    "php": ">=5.4.0"
+  },
   "autoload": {
     "psr-4": {"MyQEE\\Database\\": "src/"}
   }

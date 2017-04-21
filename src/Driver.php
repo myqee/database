@@ -1,14 +1,12 @@
 <?php
 namespace MyQEE\Database;
 
-use \Exception;
-
 /**
  * 数据库驱动核心类
  *
  * @author     呼吸二氧化碳 <jonwang@myqee.com>
  * @category   Database
- * @copyright  Copyright (c) 2008-2016 myqee.com
+ * @copyright  Copyright (c) 2008-2018 myqee.com
  * @license    http://www.myqee.com/license.html
  */
 abstract class Driver
@@ -143,18 +141,20 @@ abstract class Driver
      *
      * 每个value都是一个数组, 类似:
      *
-     *      [
-     *          'id        => '';    // 例如 mysql://user:pass@localhost:3306'/
-     *          'hostname' => '';
-     *          'port'     => '';
-     *          'socket'   => '';
-     *          'username' => '';
-     *          'password' => '';
-     *          'database' => '';
-     *          'time'     => '';
-     *          'charset'  => '';
-     *          'resource  => '';   // 资'源
-     *      ];
+     * ```php
+     *  $arr = [
+     *      'id        => '',    // 例如 mysql://user:pass@localhost:3306'/
+     *      'hostname' => '',
+     *      'port'     => '',
+     *      'socket'   => '',
+     *      'username' => '',
+     *      'password' => '',
+     *      'database' => '',
+     *      'time'     => '',
+     *      'charset'  => '',
+     *      'resource  => '',   // 资'源
+     *  ];
+     * ```
      *
      * @var array
      */
@@ -174,6 +174,15 @@ abstract class Driver
      */
     protected $failConnections = [];
 
+    /**
+     * 当开启自动转换编码时原始数据编码
+     *
+     * null 表示不需要转换
+     *
+     * @var null
+     */
+    protected $convertToUtf8FromCharset = null;
+
 
     public function __construct(array $config)
     {
@@ -181,7 +190,7 @@ abstract class Driver
 
         if (!isset($this->config['connection']['hostname']) || !$this->config['connection']['hostname'])
         {
-            throw new Exception('database config error, need hostname');
+            throw new Exception('database config error, required hostname');
         }
 
         if ($this->defaultPort && (!isset($this->config['connection']['port']) || !$this->config['connection']['port'] > 0))
@@ -216,10 +225,12 @@ abstract class Driver
             }
         }
 
-        if (!isset($this->config['table_prefix']))
+        if (!isset($this->config['prefix']))
         {
-            $this->config['table_prefix'] = '';
+            $this->config['prefix'] = '';
         }
+
+        $this->convertToUtf8FromCharset = $this->config['autoConvertToUtf8'] && !in_array($this->config['charset'], ['UTF8', 'UTF8MB4', 'UTF16']) ? $this->config['dataCharset'] : null;
     }
 
     public function __destruct()
@@ -428,6 +439,7 @@ abstract class Driver
 
     /**
      * 查询
+     *
      * @param string $sql 查询语句
      * @param bool|string $asObject 是否返回对象
      * @param string $clusterName 集群名称（例如 slave, master）, 不设置则使用当前设置
@@ -656,13 +668,13 @@ abstract class Driver
     /**
      * 切换编码
      *
-     * 根据 $config 中 auto_change_charset 参数和 data_charset 参数进行数据编码的转换
+     * 如果开启了编码转换到utf8，则进行数据编码的转换
      *
      * @param string $value
      */
     protected function convertEncoding(& $value)
     {
-        if ($this->config['auto_change_charset'] && $this->config['charset'] !== 'UTF8')
+        if (null !== $this->convertToUtf8FromCharset)
         {
             static $mb = null;
 
@@ -674,14 +686,12 @@ abstract class Driver
             # 转换编码编码
             if ($mb)
             {
-                $value = \mb_convert_encoding((string)$value, $this->config['data_charset'], 'UTF-8');
+                $value = \mb_convert_encoding((string)$value, $this->convertToUtf8FromCharset, 'UTF-8');
             }
             else
             {
-                $value = \iconv('UTF-8', $this->config['data_charset'] . '//IGNORE', (string)$value);
+                $value = \iconv('UTF-8', $this->convertToUtf8FromCharset . '//IGNORE', (string)$value);
             }
         }
-
-        return $value;
     }
 }

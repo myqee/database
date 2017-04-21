@@ -6,18 +6,11 @@ namespace MyQEE\Database;
  *
  * @author     呼吸二氧化碳 <jonwang@myqee.com>
  * @category   Database
- * @copyright  Copyright (c) 2008-2016 myqee.com
+ * @copyright  Copyright (c) 2008-2018 myqee.com
  * @license    http://www.myqee.com/license.html
  */
-abstract class Result implements \Countable, \Iterator, \SeekableIterator, \ArrayAccess
+abstract class Result implements \Countable, \Iterator, \SeekableIterator, \ArrayAccess, \JsonSerializable
 {
-    /**
-     * 当前配置
-     *
-     * @var array
-     */
-    protected $config;
-
     /**
      * 查询语句
      *
@@ -30,7 +23,7 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
      *
      * @var mixed|\mysqli_result
      */
-    protected $result;
+    protected $result = null;
 
     /**
      * 返回的内容
@@ -70,48 +63,49 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
     protected $cursorMode = false;
 
     /**
-     * 数据是否需要转换编码
+     * 指定数据要的转换编码
      *
-     * @var boolean
+     * @var false|string
      */
-    protected $charsetNeedChange = false;
+    protected $dataCharset = null;
 
     /**
      * 指定是二进制数据的key，在自动转码时会或略相应的字段
+     *
      * @var array
      */
-    protected $charsetBinField = [];
+    protected $charsetBinaryField = [];
 
     /**
-     * Sets the total number of rows and stores the result locally.
+     * 设定将会自动转为游标模式的返回集最大数目
      *
-     * @param mixed $result query result
-     * @param string $sql SQL query
-     * @param $sql
-     * @param $asObject
-     * @param $config
-     * @return void
+     * @var int
      */
-    public function __construct($result, $sql, $asObject , $config)
+    const AUTO_CURSOR_MODE_MAX_COUNT = 100;
+
+    /**
+     * @param      $result
+     * @param      $sql
+     * @param      $asObject
+     * @param bool $autoConvertFromCharset
+     */
+    public function __construct($result, $sql, $asObject, $autoConvertFromCharset = null)
     {
         $this->result = $result;
         $this->query  = $sql;
-        $this->config = $config;
 
         if (is_object($asObject))
         {
             $asObject = get_class($asObject);
         }
 
-        $this->asObject = $asObject;
+        $this->asObject    = $asObject;
+        $this->dataCharset = $autoConvertFromCharset;
 
-        if ($this->config['auto_change_charset'] && $this->config['charset'] !== 'UTF8')
+        if ($this->count() > static::AUTO_CURSOR_MODE_MAX_COUNT)
         {
-            $this->charsetNeedChange = true;
-        }
-        else
-        {
-            $this->charsetNeedChange = false;
+            # 结果集超过 200 条记录自动采用指针模式
+            $this->cursorMode();
         }
     }
 
@@ -123,15 +117,10 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
         }
         else
         {
-            throw new \Exception('method not found in '. get_class($this));
+            throw new \Exception('method not found in ' . get_class($this));
         }
     }
 
-    /**
-     * Result destruction cleans up all open result sets.
-     *
-     * @return  void
-     */
     public function __destruct()
     {
         $this->free();
@@ -145,7 +134,7 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
     abstract public function free();
 
     /**
-     * 返回当前行数据
+     * 返回当前行数据，执行完内部指针会向下移动一个
      */
     abstract public function fetchAssoc();
 
@@ -158,6 +147,8 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
 
     /**
      * 返回当前返回对象
+     *
+     * @return mixed
      */
     public function result()
     {
@@ -187,40 +178,52 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
      */
     public function current()
     {
-        if ($this->currentRow !== $this->internalRow && !$this->seek($this->currentRow))return false;
+        if ($this->currentRow !== $this->internalRow && false === $this->seek($this->currentRow))
+        {
+            return false;
+        }
 
-        $this->internalRow ++;
-
-        if ($this->data && array_key_exists($this->currentRow, $this->data))
+        if (isset($this->data[$this->currentRow]))
         {
             return $this->data[$this->currentRow];
         }
 
-        $data = $this->fetchAssoc();
+        $data       = $this->fetchAssoc();
+        $currentRow = $this->currentRow;
 
-        if ($this->charsetNeedChange)
+        # 执行完 fetchAssoc() 后内部指针会向下移动一个，所以需要+1
+        $this->currentRow++;
+
+        # 处理自动编码转换
+        if (null !== $this->dataCharset)
         {
-            $this->_changeDataCharset($data);
+            $this->_convertCharset($data);
         }
 
         if (true === $this->asObject)
         {
             # 返回默认对象
-            $data = new \stdClass($data);
+            $tmp = new \stdClass();
+            foreach ($data as $k => $v)
+            {
+                $tmp->$k = $v;
+            }
+            $data = $tmp;
         }
         elseif (is_string($this->asObject))
         {
             # 返回指定对象
-            $data = new $this->asObject($data);
+            $class = $this->asObject;
+            $data  = new $class($data);
         }
 
-        if (!$this->cursorMode)
+        if (false === $this->cursorMode)
         {
-            $this->data[$this->currentRow] = $data;
+            $this->data[$currentRow] = $data;
 
             if ($this->count() === count($this->data))
             {
-                # 释放资源
+                # 获取所有内容后释放数据库资源
                 $this->free();
             }
         }
@@ -229,7 +232,7 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
     }
 
     /**
-     * Return all of the rows in the result as an array.
+     * 返回一个数组拷贝
      *
      * // Indexed array of all rows
      * $rows = $result->getArrayCopy();
@@ -240,7 +243,7 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
      * // Associative array of rows, "id" => "name"
      * $rows = $result->getArrayCopy('id', 'name');
      *
-     * @param  string $key column for associative keys
+     * @param  string $key   column for associative keys
      * @param  string $value column for values
      * @return array
      */
@@ -312,9 +315,16 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
         return $rs;
     }
 
-    public function asArray()
+    /**
+     * 返回数组
+     *
+     * @param null $key
+     * @param null $value
+     * @return array
+     */
+    public function asArray($key = null, $value = null)
     {
-        return $this->getArrayCopy();
+        return $this->getArrayCopy($key, $value);
     }
 
     /**
@@ -323,7 +333,7 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
      * // Get the "id" value
      * $id = $result->get('id');
      *
-     * @param  string $name column to get
+     * @param  string $name    column to get
      * @param  mixed  $default default value if the column does not exist
      * @return mixed
      */
@@ -333,11 +343,17 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
 
         if ($this->asObject)
         {
-            if (isset($row->$name))return $row->$name;
+            if (isset($row->$name))
+            {
+                return $row->$name;
+            }
         }
         else
         {
-            if (isset($row[$name]))return $row[$name];
+            if (isset($row[$name]))
+            {
+                return $row[$name];
+            }
         }
 
         return $default;
@@ -356,6 +372,7 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
         {
             $this->totalRows = $this->totalCount();
         }
+
         return $this->totalRows;
     }
 
@@ -375,41 +392,45 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
     }
 
     /**
-     * Implements [ArrayAccess::offsetGet], gets a given row.
+     * 获取指定位置的数据
      *
-     *      $row = $result[10];
-     *
-     * @return  mixed
+     * @return mixed
      */
     public function offsetGet($offset)
     {
-        if ($this->data && array_key_exists($offset, $this->data))return $this->data[$offset];
+        if (isset($this->data[$offset]))
+        {
+            return $this->data[$offset];
+        }
 
-        if (!$this->seek($offset)) return null;
+        if (false === $this->seek($offset))
+        {
+            return null;
+        }
 
         if (!$offset != $this->currentRow)
         {
-            $old_current       = $this->currentRow;
-            $old_internal      = $this->internalRow;
+            $oldCurrent       = $this->currentRow;
+            $oldInternal      = $this->internalRow;
             $this->currentRow  = $offset;
             $this->internalRow = $offset;
         }
 
         $rs = $this->current();
 
-        if (isset($old_current) && isset($old_internal))
+        if (isset($oldCurrent) && isset($oldInternal))
         {
-            $this->currentRow  = $old_current;
-            $this->internalRow = $old_internal;
+            $this->currentRow  = $oldCurrent;
+            $this->internalRow = $oldInternal;
         }
 
         return $rs;
     }
 
     /**
-     * Implements [ArrayAccess::offsetSet], throws an error.
+     * 设置指定位置
      *
-     * [!!] You cannot modify a database result.
+     * [!!] 此方法禁用
      *
      * @return  void
      * @throws  \Exception
@@ -420,9 +441,9 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
     }
 
     /**
-     * Implements [ArrayAccess::offsetUnset], throws an error.
+     * 删除指定位置
      *
-     * [!!] You cannot modify a database result.
+     * [!!] 此方法禁用
      *
      * @return  void
      * @throws  \Exception
@@ -433,7 +454,7 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
     }
 
     /**
-     * Implements [Iterator::key], returns the current row number.
+     * 获取当前指针位置
      *
      *      echo key($result);
      *
@@ -445,83 +466,59 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
     }
 
     /**
-     * Implements [Iterator::next], moves to the next row.
-     *
-     *      next($result);
-     *
-     * @return  $this
-     */
-    public function next()
-    {
-        ++$this->currentRow;
-
-        return $this;
-    }
-
-    /**
-     * Implements [Iterator::prev], moves to the previous row.
-     *
-     *      prev($result);
-     *
-     * @return  $this
+     * 移动指针到上一个
      */
     public function prev()
     {
         --$this->currentRow;
-
-        return $this;
     }
 
     /**
-     * Implements [Iterator::rewind], sets the current row to zero.
+     * 移动指针到下一个
+     */
+    public function next()
+    {
+        ++$this->currentRow;
+    }
+
+    /**
+     * 重置指针
      *
-     *      rewind($result);
-     *
-     * @return  $this
+     * !! 当开始一个 foreach 循环时，这是第一个被调用的方法。它将不会在 foreach 循环之后被调用
      */
     public function rewind()
     {
         $this->currentRow = 0;
-
-        return $this;
     }
 
     /**
-     * Implements [Iterator::valid], checks if the current row exists.
+     * 验证指针是否有效
      *
-     * [!!] This method is only used internally.
+     * 此方法在 Iterator::rewind() 和 Iterator::next() 方法之后被调用以此用来检查当前位置是否有效。
      *
-     * @return  boolean
+     * @return  bool
      */
     public function valid()
     {
         return $this->offsetExists($this->currentRow);
     }
 
-    public function fetch_array()
-    {
-        $data = $this->current();
-        $this->next();
-
-        return $data;
-    }
-
     /**
      * 对数组或字符串进行编码转换
      *
-     * @param array/string $data
+     * @param array /string $data
      */
-    protected function _changeDataCharset(& $data)
+    protected function _convertCharset(& $data)
     {
         if (is_array($data))
         {
-            foreach ($data as $key => &$item)
+            foreach ($data as $key => & $item)
             {
-                if ($this->charsetBinField && isset($this->charsetBinField[$key]))
+                if ($this->charsetBinaryField && isset($this->charsetBinaryField[$key]))
                 {
                     continue;
                 }
-                $this->_changeDataCharset($item);
+                $this->_convertCharset($item);
             }
         }
         else
@@ -534,34 +531,45 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
 
             if ($mb)
             {
-                $data = mb_convert_encoding($data, 'UTF-8', $this->config['data_charset']);
+                $data = mb_convert_encoding($data, 'UTF-8', $this->dataCharset);
             }
             else
             {
-                $data = iconv($this->config['data_charset'], 'UTF-8//IGNORE', $data);
+                $data = iconv($this->dataCharset, 'UTF-8//IGNORE', $data);
             }
         }
     }
 
     /**
-     * 设置指定的key是二进制数据
+     * 设置指定的Field是二进制数据
      *
-     * 此方法必须在as_array或current等前面执行
+     * 此方法必须在 asArray 或 current 等前面执行
      * 当启用自动编码转换后，获取的数据会自动转码，通过此设置后可以避免对应的字段被转码
      *
-     *     $this->is_bin('key1');
-     *     $this->is_bin('key1' , 'key2');
+     *     $this->binaryField('key1');
+     *     $this->binaryField('key1' , 'key2');
      *
      * @param string $key
      * @return $this
      */
-    public function is_bin($key)
+    public function binaryField($key, $key2 = null, $key3 = null)
     {
         $keys = func_get_args();
         foreach ($keys as $key)
         {
-            $this->charsetBinField[$key] = true;
+            $this->charsetBinaryField[$key] = true;
         }
+
         return $this;
+    }
+
+    /**
+     * 支持 JSON 序列化
+     *
+     * @return array
+     */
+    public function jsonSerialize()
+    {
+        return $this->getArrayCopy();
     }
 }

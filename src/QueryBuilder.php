@@ -6,7 +6,7 @@ namespace MyQEE\Database;
  *
  * @author     呼吸二氧化碳 <jonwang@myqee.com>
  * @category   Database
- * @copyright  Copyright (c) 2008-2016 myqee.com
+ * @copyright  Copyright (c) 2008-2018 myqee.com
  * @license    http://www.myqee.com/license.html
  */
 abstract class QueryBuilder
@@ -23,7 +23,7 @@ abstract class QueryBuilder
      *
      * @var array
      */
-    protected $builderBak = array();
+    protected $builderBak = [];
 
     protected $lastJoin = null;
 
@@ -31,6 +31,7 @@ abstract class QueryBuilder
     {
         # 初始化数据
         $this->reset();
+        $this->builderBak = $this->builder;
     }
 
     /**
@@ -72,7 +73,7 @@ abstract class QueryBuilder
     /**
      * 获取Builder配置
      *
-     * 可用 $builder = & $obj->get_builder(); 获取到内存指针
+     * 可用 $builder = & $obj->getBuilder(); 获取到内存指针
      *
      * @return array
      */
@@ -98,24 +99,24 @@ abstract class QueryBuilder
      * 设置Builder信息
      *
      *      // 设置一样的builder
-     *      $db->from('mytable')->where('id>', 10)->limit(10)->order_by('id', 'DESC');
+     *      $db->from('mytable')->where('id>', 10)->limit(10)->orderBy('id', 'DESC');
      *
      *      // 获取当前builder
-     *      $builder = $db->get_builder();
+     *      $builder = $db->getBuilder();
      *
      *      // 执行查询
-     *      $data1 = $db->where('type', 1)->get()->as_array();
-     *      echo $db->last_query();     //SELECT * FROM `mytable` WHERE `id` > 10 AND `type` = '1' ORDER BY `id` DESC LIMIT 10
+     *      $data1 = $db->where('type', 1)->get()->asArray();
+     *      echo $db->lastQuery();     //SELECT * FROM `mytable` WHERE `id` > 10 AND `type` = '1' ORDER BY `id` DESC LIMIT 10
      *
      *      // 将前面获取的builder重新设置回去
-     *      $db->set_builder($builder);
+     *      $db->setBuilder($builder);
      *
      *      // 再次执行另外一个附加条件的查询
-     *      $data2 = $db->where('type', 3)->get()->as_array();
-     *      echo $db->last_query();     //SELECT * FROM `mytable` WHERE `id` > 10 AND `type` = '3' ORDER BY `id` DESC LIMIT 10
+     *      $data2 = $db->where('type', 3)->get()->asArray();
+     *      echo $db->lastQuery();     //SELECT * FROM `mytable` WHERE `id` > 10 AND `type` = '3' ORDER BY `id` DESC LIMIT 10
      *
      *
-     * @param array $builder builder信息数组，不必完整的，建议通过get_builder()获取后设置
+     * @param array $builder builder信息数组，不必完整的，建议通过getBuilder()获取后设置
      * @return $this
      */
     public function setBuilder(array $builder)
@@ -144,16 +145,17 @@ abstract class QueryBuilder
      *
      * 如果查询是SELECT * 则不需要设置，系统会自动处理
      *
-     *      $db->select('id', 'username')->from('members')->get()->as_array();
-     *      echo $db->last_query();     //SELECT `id`, `username` FROM `members`;
+     * ```php
+     *  $db->select('id', 'username')->from('members')->get()->asArray();
+     *  echo $db->lastQuery();     //SELECT `id`, `username` FROM `members`;
      *
-     *      $db->select('db1.id', 'db2.username')->from('members as db1')->join('mydb as db2')->on('db1.id', 'db2.mid')->get()->as_array();
-     *      echo $db->last_query();     //SELECT `db1`.`id`, `db2`.`username` FROM `members` AS `db1` JOIN ON `db1`.`id` = `db2`.`mid`;
+     *  $db->select('db1.id', 'db2.username')->from('members as db1')->join('mydb as db2')->on('db1.id', 'db2.mid')->get()->asArray();
+     *  echo $db->lastQuery();     //SELECT `db1`.`id`, `db2`.`username` FROM `members` AS `db1` JOIN ON `db1`.`id` = `db2`.`mid`;
      *
-     *      // 使用Database::expr_value()方法可以传入一个不被解析的字符串
-     *      $db->select(Database::expr_value('SUM("id") as `id`'))->from('members')->get()->as_array();
-     *      echo $db->last_query();     //SELECT SUM("id") as `id` FROM `members`;
-     *
+     *  // 使用Database::expr_value()方法可以传入一个不被解析的字符串
+     *  $db->select(Database::expr_value('SUM("id") as `id`'))->from('members')->get()->as_array();
+     *  echo $db->last_query();     //SELECT SUM("id") as `id` FROM `members`;
+     * ```
      *
      * @param  mixed $columns column name or array($column, $alias) or object
      * @param  ...
@@ -185,7 +187,7 @@ abstract class QueryBuilder
      * @param  array $columns list of column names or aliases
      * @return $this
      */
-    public function select_array(array $columns)
+    public function selectArray(array $columns)
     {
         $this->builder['select'] = array_merge($this->builder['select'], $columns);
 
@@ -195,7 +197,7 @@ abstract class QueryBuilder
     /**
      * 查询最大值
      *
-     *    $db->select_max('test')->from('db')->group_by('class_id')->get()->as_array();
+     *    $db->selectMax('test')->from('db')->groupBy('class_id')->get()->as_array();
      *
      * @param string $column
      * @return $this
@@ -210,7 +212,7 @@ abstract class QueryBuilder
     /**
      * 查询平均值
      *
-     *    $db->select_min('test')->from('db')->group_by('class_id')->get()->as_array();
+     *    $db->selectMin('test')->from('db')->group_by('class_id')->get()->asArray();
      *
      * @param string $column
      * @return $this
@@ -225,7 +227,7 @@ abstract class QueryBuilder
     /**
      * 查询平均值
      *
-     *    $db->select_avg('test')->from('db')->group_by('class_id')->get()->as_array();
+     *    $db->selectAvg('test')->from('db')->group_by('class_id')->get()->asArray();
      *
      * @param string $column
      * @return $this
@@ -240,7 +242,7 @@ abstract class QueryBuilder
     /**
      * 查询总和
      *
-     *    $db->select_sum('test')->from('db')->group_by('class_id')->get()->as_array();
+     *    $db->selectSum('test')->from('db')->group_by('class_id')->get()->asArray();
      *
      * @param string $column
      * @return $this
@@ -259,8 +261,8 @@ abstract class QueryBuilder
      * 目前支持MongoDB的aggregation框架Group查询：$sum,$max,$min,$avg,$last,$first等，详情见 http://docs.mongodb.org/manual/reference/aggregation/group/
      * MySQL支持sum,max,min,svg等
      *
-     *    $db->select_adv('test','max');        //查询最大值
-     *    $db->select_adv('test','sum',3);      //查询+3的总和
+     *    $db->selectAdv('test','max');        //查询最大值
+     *    $db->selectAdv('test','sum',3);      //查询+3的总和
      *
      * @param string $column
      * @param string $opt
@@ -268,7 +270,7 @@ abstract class QueryBuilder
      */
     public function selectAdv($column, $type, $opt1 = null, $opt2 = null)
     {
-        $this->builder['select_adv'][] = func_get_args();
+        $this->builder['selectAdv'][] = func_get_args();
 
         return $this;
     }
@@ -473,7 +475,7 @@ abstract class QueryBuilder
     }
 
     /**
-     * group_by(c1,c2,c3,.....)
+     * groupBy(c1,c2,c3,.....)
      *
      * @param  mixed $columns column name or array($column, $alias) or object
      * @param  ...
@@ -483,7 +485,7 @@ abstract class QueryBuilder
     {
         $columns = func_get_args();
 
-        $this->builder['group_by'] = array_merge($this->builder['group_by'], $columns);
+        $this->builder['groupBy'] = array_merge($this->builder['groupBy'], $columns);
 
         return $this;
     }
@@ -492,20 +494,20 @@ abstract class QueryBuilder
      * 构成生成 GROUP_CONCAT() 的语句
      *
      * @param $column
-     * @param string $order_by
+     * @param string $orderBy
      * @param string $separator
      * @param bool $distinct
      * @return $this
      */
-    public function groupConcat($column, $order_by = null, $separator = null, $distinct = false)
+    public function groupConcat($column, $orderBy = null, $separator = null, $distinct = false)
     {
-        $this->builder['group_concat'][] = func_get_args();
+        $this->builder['groupConcat'][] = func_get_args();
 
         return $this;
     }
 
     /**
-     * Alias of and_having()
+     * Alias of andHaving()
      *
      * @param  mixed $column column name or array($column, $alias) or object
      * @param  string $value logic operator
@@ -557,7 +559,7 @@ abstract class QueryBuilder
     }
 
     /**
-     * Alias of and_having_open()
+     * Alias of andHavingOpen()
      *
      * @return $this
      */
@@ -644,11 +646,14 @@ abstract class QueryBuilder
     /**
      * 重设数据
      *
-     * @param string $key 不传则全部清除，可选参数 select,select_adv,from,join,where,group_by,having,set,columns,values,where,index,order_by,distinct,limit,offset,table,last_join,join,on
+     * @param string $key 不传则全部清除，可选参数 select, selectAdv, from, join, where, groupBy, having, set, columns, values, where, index, orderBy, distinct, limit, offset, table, lastJoin, join, on
      * @return $this
      */
     public function reset($key = null)
     {
+        // 使用 `$db->recoveryLastBuilder()` 方法恢复前一个builder
+        $this->builderBak = $this->builder;
+
         if ($key)
         {
             foreach ((array)$key as $item)
@@ -664,10 +669,10 @@ abstract class QueryBuilder
                     case 'table':
                         $this->builder[$key] = null;
                         break;
-                    case 'last_join':
+                    case 'lastJoin':
                     case 'join':
                     case 'on':
-                        $this->builder['last_join'] = null;
+                        $this->builder['lastJoin'] = null;
                         break;
                     default:
                         if (isset($this->builder[$key]))
@@ -680,30 +685,28 @@ abstract class QueryBuilder
         }
         else
         {
-            $this->builderBak = $this->builder;
-
             $this->builder['select']
-                = $this->builder['select_adv']
+                = $this->builder['selectAdv']
                 = $this->builder['from']
                 = $this->builder['join']
                 = $this->builder['where']
-                = $this->builder['group_by']
+                = $this->builder['groupBy']
                 = $this->builder['having']
                 = $this->builder['set']
                 = $this->builder['columns']
                 = $this->builder['values']
                 = $this->builder['where']
                 = $this->builder['index']
-                = $this->builder['group_concat']
+                = $this->builder['groupConcat']
                 = $this->builder['statement']
-                = $this->builder['order_by'] = [];
+                = $this->builder['orderBy'] = [];
 
             $this->builder['distinct'] = false;
 
             $this->builder['limit']
                 = $this->builder['offset']
                 = $this->builder['table']
-                = $this->builder['last_join'] = null;
+                = $this->builder['lastJoin'] = null;
         }
 
         return $this;
@@ -726,7 +729,7 @@ abstract class QueryBuilder
     }
 
     /**
-     * Alias of and_where()
+     * Alias of andWhere()
      *
      * @param  mixed $column column name or array($column, $alias) or object
      * @param  string $value logic operator
@@ -786,7 +789,7 @@ abstract class QueryBuilder
     }
 
     /**
-     * Alias of and_where_open()
+     * Alias of andWhereOpen()
      *
      * @return $this
      */
@@ -854,15 +857,26 @@ abstract class QueryBuilder
     }
 
     /**
-     * Applies sorting with "ORDER BY ..."
+     * 生成 "ORDER BY ..."
      *
-     * @param  mixed $column column name or array($column, $alias) or object
-     * @param  string $direction direction of sorting
+     * `$db->orderBy('id')`         根据 id 升序排列
+     * `$db->orderBy('id', 'desc')` 根据 id 倒序排列
+     *
+     * MySQL 驱动支持 ORDER BY FIELD, 例：`$db->orderBy('id', [9, 8, 3, 1, 2])` 生成后为：
+     *
+     * ```
+     * ORDER BY FIELD(`id`, '9', '8', '3', '1', '2')
+     * ```
+     *
+     * 将按 id 指定的顺序排序
+     *
+     * @param  mixed $column column name or [$column, $alias] or object
+     * @param  string|array $direction 排序参数: ASC, DESC
      * @return $this
      */
     public function orderBy($column, $direction = 'ASC')
     {
-        $this->builder['order_by'][] = array($column, strtoupper($direction));
+        $this->builder['orderBy'][] = array($column, is_string($direction) ? strtoupper($direction) : $direction);
 
         return $this;
     }
@@ -914,26 +928,26 @@ abstract class QueryBuilder
      * 返回 "$column MOD $mod = $value"
      *
      * @param string $column
-     * @param int $mod_dig
-     * @param int $value
+     * @param int    $modDig
+     * @param int    $value
      * @return $this
      */
-    public function mod($column, $mod_dig, $value)
+    public function mod($column, $modDig, $value)
     {
-        return $this->andWhere($column, array($mod_dig, $value), 'mod');
+        return $this->andWhere($column, array($modDig, $value), 'mod');
     }
 
     /**
      * 返回 "OR $column MOD $mod = $value"
      *
      * @param string $column
-     * @param int $mod_dig
-     * @param int $value
+     * @param int    $modDig
+     * @param int    $value
      * @return $this
      */
-    public function orMod($column, $mod_dig, $value, $op = '=')
+    public function orMod($column, $modDig, $value, $op = '=')
     {
-        return $this->orWhere($column, array($mod_dig, $value, $op), 'mod');
+        return $this->orWhere($column, array($modDig, $value, $op), 'mod');
     }
 
     /**
@@ -980,12 +994,12 @@ abstract class QueryBuilder
      *
      * 此方法等同于在执行查询前先获取 `$builder = $db->getBuilder();` 然后执行SQL完毕后把原先的builder重新设置 `$db->setBuilder($builder);`
      *
-     *      $db->from('my_db')->where('id', 1)->get()->asArray();    // 执行查询
+     *      $db->from('mydb')->where('id', 1)->get()->asArray();     // 执行查询
      *      $db->recoveryLastBuilder();                              // 恢复
      *
      * 等同于下面代码，但明显上面代码更优雅
      *
-     *      $db->from('my_db')->where('id', 1);
+     *      $db->from('mydb')->where('id', 1);
      *
      *      $builder = $db->getBuilder();      // 在执行前获取builder设置
      *      $db->get()->asArray();             // 执行查询
@@ -993,15 +1007,15 @@ abstract class QueryBuilder
      *
      * 例子一
      *
-     *      $count = $db->from('my_db')->where('id', 10, '>')->count_records();
-     *      // 在执行count_records()时，所有的builder数据将会被清空
-     *      echo $db->lastQuery();   // SELECT COUNT(1) AS `total_row_count` FROM `mydb` WHERE `id` > '10'
+     *      $count = $db->from('mydb')->where('id', 10, '>')->countRecords();
+     *      // 在执行countRecords()时，所有的builder数据将会被清空
+     *      echo $db->lastQuery();   // SELECT COUNT(1) AS `totalRowCount` FROM `mydb` WHERE `id` > '10'
      *
      *      // 恢复builder
      *      $db->recoveryLastBuilder();
      *      $db->limit(20)->orderBy('id', 'DESC')->get()->asArray();
      *
-     *      echo $db->last_query();   // SELECT * FROM `my_db` WHERE `id` > '10' ORDER BY `id` DESC LIMIT 10
+     *      echo $db->lastQuery();   // SELECT * FROM `mydb` WHERE `id` > '10' ORDER BY `id` DESC LIMIT 10
      *
      *
      * @return $this
@@ -1020,7 +1034,7 @@ abstract class QueryBuilder
      * 创建一个不会被过滤处理的字符串
      *
      * @param string|array expression
-     * @return $this_Expression
+     * @return Expression
      */
     public static function exprValue($string)
     {
