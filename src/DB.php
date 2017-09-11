@@ -71,7 +71,7 @@ class DB extends QueryBuilder
     /**
      * 返回数据库实例化对象
      *
-     * 支持 `$db = DB::instance('mysqli://root:123456@127.0.0.1/myqee/');` 的方式
+     * 支持 `$db = DB::instance('mysql://root:123456@127.0.0.1/myqee/');` 的方式
      *
      * @param string $configName 默认值为 Database::DEFAULT_CONFIG_NAME
      * @return static
@@ -116,7 +116,7 @@ class DB extends QueryBuilder
     /**
      * new DB('default');
      *
-     * 支持 `new DB('mysqli://root:123456@127.0.0.1/myqee/');` 的方式
+     * 支持 `new DB('mysql://root:123456@127.0.0.1/myqee/');` 的方式
      *
      * @param string $configName 默认值为 `Database::DEFAULT_CONFIG_NAME`
      * @return  void
@@ -194,7 +194,7 @@ class DB extends QueryBuilder
                 case 'mysqli':
                 case 'maria':
                 case 'mariadb':
-                    $driver = 'MySQLi';
+                    $driver = 'MariaDB';
                     break;
 
                 case 'mongo':
@@ -221,7 +221,7 @@ class DB extends QueryBuilder
 
             if (!$driver)
             {
-                $driver = 'MySQLi';
+                $driver = 'MariaDB';
             }
 
             $driver = "\\MyQEE\\Database\\{$driver}\\Driver";

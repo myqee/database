@@ -664,16 +664,19 @@ abstract class QueryBuilder
                     case 'distinct':
                         $this->builder['distinct'] = false;
                         break;
+
                     case 'limit':
                     case 'offset':
                     case 'table':
                         $this->builder[$key] = null;
                         break;
+
                     case 'lastJoin':
                     case 'join':
                     case 'on':
                         $this->builder['lastJoin'] = null;
                         break;
+
                     default:
                         if (isset($this->builder[$key]))
                         {
