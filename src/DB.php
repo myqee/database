@@ -224,6 +224,7 @@ class DB extends QueryBuilder
                 $driver = 'MariaDB';
             }
 
+            $this->config['type'] = $driver;
             $driver = "\\MyQEE\\Database\\{$driver}\\Driver";
         }
 
