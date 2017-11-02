@@ -48,6 +48,7 @@ abstract class DriverSQL extends Driver
             'REPLACE',
             'UPDATE',
             'DELETE',
+            'SET',
         ];
 
         if (!in_array($type, $typeArr))
