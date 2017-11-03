@@ -182,6 +182,7 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
         {
             return false;
         }
+        $this->internalRow++;
 
         if (isset($this->data[$this->currentRow]))
         {
