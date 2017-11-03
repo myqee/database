@@ -33,6 +33,13 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
     protected $data = [];
 
     /**
+     * 当前已获取的 data 的 count 数
+     *
+     * @var int
+     */
+    protected $dataCount = 0;
+
+    /**
      * 返回总行数
      *
      * @var int
@@ -81,7 +88,7 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
      *
      * @var int
      */
-    const AUTO_CURSOR_MODE_MAX_COUNT = 100;
+    const AUTO_CURSOR_MODE_MAX_COUNT = 200;
 
     /**
      * @param      $result
@@ -124,6 +131,8 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
     public function __destruct()
     {
         $this->free();
+        $this->data      = [];
+        $this->dataCount = 0;
     }
 
     /**
@@ -144,6 +153,18 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
      * @return int
      */
     abstract protected function totalCount();
+
+    /**
+     * 返回一个对象
+     *
+     * @return \ArrayObject|\stdClass
+     */
+    public function fetchObject()
+    {
+        $data = $this->fetchAssoc();
+
+        return $this->convertToObject($data);
+    }
 
     /**
      * 返回当前返回对象
@@ -178,50 +199,48 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
      */
     public function current()
     {
+        if (isset($this->data[$this->currentRow]))
+        {
+            # 直接在缓存中获取
+            return $this->data[$this->currentRow];
+        }
+
         if ($this->currentRow !== $this->internalRow && false === $this->seek($this->currentRow))
         {
             return false;
         }
 
-        if (isset($this->data[$this->currentRow]))
+        if (null !== $this->dataCharset)
         {
-            return $this->data[$this->currentRow];
-        }
+            # 处理自动编码转换
+            $data = $this->fetchAssoc();
+            $this->_convertCharset($data);
 
-        $data       = $this->fetchAssoc();
-        $currentRow = $this->currentRow;
+            if ($this->asObject)
+            {
+                $data = $this->convertToObject($data);
+            }
+        }
+        elseif ($this->asObject)
+        {
+            // 读取对象数据
+            $data = $this->fetchObject();
+        }
+        else
+        {
+            // 读取数组数据
+            $data = $this->fetchAssoc();
+        }
 
         # 执行完 fetchAssoc() 后内部指针会向下移动一个，所以需要+1
         $this->internalRow++;
 
-        # 处理自动编码转换
-        if (null !== $this->dataCharset)
-        {
-            $this->_convertCharset($data);
-        }
-
-        if (true === $this->asObject)
-        {
-            # 返回默认对象
-            $tmp = new \stdClass();
-            foreach ($data as $k => $v)
-            {
-                $tmp->$k = $v;
-            }
-            $data = $tmp;
-        }
-        elseif (is_string($this->asObject))
-        {
-            # 返回指定对象
-            $class = $this->asObject;
-            $data  = new $class($data);
-        }
-
         if (false === $this->cursorMode)
         {
-            $this->data[$currentRow] = $data;
+            $this->data[$this->currentRow] = $data;
+            $this->dataCount++;
 
-            if ($this->count() === count($this->data))
+            if ($this->count() === $this->dataCount)
             {
                 # 获取所有内容后释放数据库资源
                 $this->free();
@@ -247,7 +266,7 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
      * @param  string $value column for values
      * @return array
      */
-    public function getArrayCopy($key = null, $value = null)
+    public function asArray($key = null, $value = null)
     {
         $rs = [];
 
@@ -316,15 +335,15 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
     }
 
     /**
-     * 返回数组
+     * 返回一个数组拷贝
      *
      * @param null $key
      * @param null $value
      * @return array
      */
-    public function asArray($key = null, $value = null)
+    public function getArrayCopy($key = null, $value = null)
     {
-        return $this->getArrayCopy($key, $value);
+        return $this->asArray($key, $value);
     }
 
     /**
@@ -541,6 +560,32 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
     }
 
     /**
+     * 装数组数据转换成对象
+     *
+     * @param $data
+     * @return \stdClass
+     */
+    protected function convertToObject($data)
+    {
+        if (is_string($this->asObject))
+        {
+            # 返回指定对象
+            $class = $this->asObject;
+
+            return new $class($data);
+        }
+        else
+        {
+            $tmp = new \stdClass();
+            foreach ($data as $k => $v)
+            {
+                $tmp->$k = $v;
+            }
+            return $tmp;
+        }
+    }
+
+    /**
      * 设置指定的Field是二进制数据
      *
      * 此方法必须在 asArray 或 current 等前面执行
@@ -570,6 +615,6 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
      */
     public function jsonSerialize()
     {
-        return $this->getArrayCopy();
+        return $this->asArray();
     }
 }
