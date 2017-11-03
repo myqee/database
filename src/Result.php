@@ -182,7 +182,6 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
         {
             return false;
         }
-        $this->internalRow++;
 
         if (isset($this->data[$this->currentRow]))
         {
@@ -193,7 +192,7 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
         $currentRow = $this->currentRow;
 
         # 执行完 fetchAssoc() 后内部指针会向下移动一个，所以需要+1
-        $this->currentRow++;
+        $this->internalRow++;
 
         # 处理自动编码转换
         if (null !== $this->dataCharset)
