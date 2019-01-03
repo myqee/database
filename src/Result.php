@@ -379,6 +379,29 @@ abstract class Result implements \Countable, \Iterator, \SeekableIterator, \Arra
     }
 
     /**
+     * 获取第一条数据
+     *
+     * @return mixed
+     */
+    public function first()
+    {
+        return $this->offsetGet(0);
+    }
+
+    /**
+     * 获取最后一条数据
+     *
+     * @return bool|mixed
+     */
+    public function last()
+    {
+        $count = $this->count();
+        if ($count === 0)return false;
+
+        return $this->offsetGet($count - 1);
+    }
+
+    /**
      * Implements [Countable::count], returns the total number of rows.
      *
      * echo count($result);
