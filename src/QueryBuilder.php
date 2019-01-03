@@ -212,7 +212,7 @@ abstract class QueryBuilder
     /**
      * 查询平均值
      *
-     *    $db->selectMin('test')->from('db')->group_by('class_id')->get()->asArray();
+     *    $db->selectMin('test')->from('db')->groupBy('class_id')->get()->asArray();
      *
      * @param string $column
      * @return $this
@@ -227,7 +227,7 @@ abstract class QueryBuilder
     /**
      * 查询平均值
      *
-     *    $db->selectAvg('test')->from('db')->group_by('class_id')->get()->asArray();
+     *    $db->selectAvg('test')->from('db')->groupBy('class_id')->get()->asArray();
      *
      * @param string $column
      * @return $this
@@ -242,7 +242,7 @@ abstract class QueryBuilder
     /**
      * 查询总和
      *
-     *    $db->selectSum('test')->from('db')->group_by('class_id')->get()->asArray();
+     *    $db->selectSum('test')->from('db')->groupBy('class_id')->get()->asArray();
      *
      * @param string $column
      * @return $this
